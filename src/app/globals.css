@@ -1,0 +1,178 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * AURA Studio design tokens — extracted from the source app's CSS :root.
+ * Exact HSL values: cream background, espresso primary (#411401),
+ * butter-yellow accent, taupe secondary.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.375rem; /* 6px — the source app's --radius */
+  --background: hsl(40 25% 94%);      /* warm cream #F4F1EC */
+  --foreground: hsl(21 93% 13%);      /* espresso #411401 */
+  --card: hsl(20 18% 88%);
+  --card-foreground: hsl(21 93% 13%);
+  --popover: hsl(40 25% 94%);
+  --popover-foreground: hsl(21 93% 13%);
+  --primary: hsl(21 93% 13%);         /* espresso #411401 */
+  --primary-foreground: hsl(40 25% 94%); /* cream #F0EFE9 */
+  --secondary: hsl(15 22% 84%);       /* taupe-tint */
+  --secondary-foreground: hsl(21 93% 13%);
+  --muted: hsl(15 22% 84%);
+  --muted-foreground: hsl(270 8% 48%);
+  --accent: hsl(57 100% 82%);         /* butter yellow #FFFAA4 */
+  --accent-foreground: hsl(0 0% 100%);
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(15 18% 76%);
+  --input: hsl(15 18% 76%);
+  --ring: hsl(15 52% 53%);            /* terracotta */
+  --chart-1: hsl(15 52% 53%);
+  --chart-2: hsl(0 0% 13%);
+  --chart-3: hsl(20 26% 65%);
+  --chart-4: hsl(62 85% 75%);
+  --chart-5: hsl(270 8% 65%);
+  --sidebar-background: hsl(20 18% 88%);
+  --sidebar-foreground: hsl(21 93% 13%);
+  --sidebar-primary: hsl(21 93% 13%);
+  --sidebar-primary-foreground: hsl(40 25% 94%);
+  --sidebar-accent: hsl(15 22% 80%);
+  --sidebar-accent-foreground: hsl(0 0% 13%);
+  --sidebar-border: hsl(15 18% 76%);
+  --sidebar-ring: hsl(15 52% 53%);
+}
+
+.dark {
+  --background: hsl(21 30% 10%);
+  --foreground: hsl(40 25% 94%);
+  --card: hsl(21 25% 14%);
+  --card-foreground: hsl(40 25% 94%);
+  --popover: hsl(21 30% 10%);
+  --popover-foreground: hsl(40 25% 94%);
+  --primary: hsl(40 25% 94%);
+  --primary-foreground: hsl(21 93% 13%);
+  --secondary: hsl(21 20% 18%);
+  --secondary-foreground: hsl(40 25% 94%);
+  --muted: hsl(21 20% 18%);
+  --muted-foreground: hsl(40 15% 65%);
+  --accent: hsl(57 100% 82%);
+  --accent-foreground: hsl(0 0% 13%);
+  --destructive: hsl(0 72% 51%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(21 15% 24%);
+  --input: hsl(21 15% 24%);
+  --ring: hsl(15 52% 53%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .font-heading {
+    font-family: var(--font-heading), 'Taviraj', serif;
+  }
+  .font-body {
+    font-family: var(--font-body), 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+  /* Signature AURA label: tiny, tracked-out uppercase kicker */
+  .kicker {
+    @apply text-[11px] font-medium uppercase;
+    letter-spacing: 0.35em;
+  }
+}
+
+/* AURA breathe animation — the header logo letter-spacing pulse */
+@keyframes breathe {
+  0% { letter-spacing: 0.45em; }
+  50% { letter-spacing: 0.55em; }
+  100% { letter-spacing: 0.45em; }
+}
+.animate-breathe {
+  animation: breathe 6s ease-in-out infinite;
+}
+
+/* Character-stagger reveal for hero headings */
+@keyframes char-rise {
+  from { opacity: 0; transform: translateY(1.2em) rotate(2deg); }
+  to { opacity: 1; transform: translateY(0) rotate(0); }
+}
+.char-rise {
+  display: inline-block;
+  opacity: 0;
+  animation: char-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Marquee for the footer AURA STUDIO strip */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 40s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-breathe,
+  .animate-marquee,
+  .char-rise {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Custom scrollbar for long lists (schedule page) */
+.scroll-elegant::-webkit-scrollbar { height: 8px; width: 8px; }
+.scroll-elegant::-webkit-scrollbar-track { background: transparent; }
+.scroll-elegant::-webkit-scrollbar-thumb { background: hsl(15 18% 76%); border-radius: 9999px; }
+.scroll-elegant::-webkit-scrollbar-thumb:hover { background: hsl(15 22% 60%); }

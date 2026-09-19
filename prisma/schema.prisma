@@ -1,0 +1,121 @@
+// AURA Fitness Studio — Prisma schema
+// Mirrors the Base44 source entities (StudioClass, Instructor, Membership, Booking)
+// plus first-party auth tables. Money is integer minor units (cents) everywhere —
+// the scandihaven "money is integers" invariant.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  role         String   @default("member") // member | admin
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions            Session[]
+  bookings            Booking[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model StudioClass {
+  id            String   @id @default(cuid())
+  title         String
+  type          String // YOGA | HIIT | PILATES | STRENGTH | BARRE | CYCLING
+  intensity     String // LOW | MEDIUM | HIGH
+  dayOfWeek     String // MONDAY..SUNDAY
+  startTime     String // "06:30" 24h wall-clock
+  endTime       String // "07:30"
+  capacity      Int      @default(16)
+  spotsTaken    Int      @default(0)
+  description   String?
+  instructorName String?
+  requirements  String?
+  imageUrl      String?
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  bookings Booking[]
+
+  @@index([type])
+  @@index([dayOfWeek])
+}
+
+model Instructor {
+  id             String  @id @default(cuid())
+  name           String
+  title          String // "YOGA & MINDFULNESS"
+  bio            String
+  philosophy     String?
+  imageUrl       String
+  specialties    String  @default("[]") // JSON string[] (SQLite has no arrays)
+  certifications String  @default("[]") // JSON string[]
+  sortOrder      Int     @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Membership {
+  id              String  @id @default(cuid())
+  name            String
+  priceCents      Int // integer minor units — never floats on money
+  billingCycle    String // MONTHLY | ANNUAL
+  classesPerMonth Int?
+  features        String  @default("[]") // JSON string[]
+  isFeatured      Boolean @default(false)
+  sortOrder       Int     @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Booking {
+  id          String   @id @default(cuid())
+  userId      String
+  classId     String
+  status      String   @default("confirmed") // confirmed | cancelled
+  bookingDate DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studioClass StudioClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  // One active booking per member per class — the duplicate-booking guard.
+  @@unique([userId, classId])
+  @@index([userId, status])
+  @@index([classId, status])
+}

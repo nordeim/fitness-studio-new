@@ -1,0 +1,58 @@
+# dependencies
+node_modules
+/.pnp
+.pnp.*
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# database (generated — run `bun run db:push && bun run scripts/seed.ts`)
+/db/*.db
+/db/*.db-journal
+
+# misc
+.DS_Store
+*.pem
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+dev.log
+server.log
+
+# env files — never commit secrets
+.env
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# secrets & keys — never commit
+*.key
+ssh-key.txt
+
+# sandbox artifacts
+/scratch/
+/tool-results/
+/upload/
+/download/
+/.zscripts/
+/mini-services/
+/examples/
+.z-ai-config
+.claude
+local-*
