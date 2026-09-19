@@ -23,8 +23,13 @@ const MENU_LINKS = [
  * Deviation from source (fix): the source leaves the wordmark/burger white
  * over the cream panel (near-invisible); we switch the chrome to espresso
  * while the menu is open so the close control stays visible.
+ *
+ * `forceSolid` is for pages without an espresso hero band (the 404): the
+ * source's header sits transparent+white over the light slate content
+ * there, rendering the wordmark invisible — we keep the cream+espresso
+ * chrome instead. Hide-on-scroll still applies.
  */
-export function SiteHeader() {
+export function SiteHeader({ forceSolid = false }: { forceSolid?: boolean }) {
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
 
@@ -42,6 +47,7 @@ export function SiteHeader() {
     }
   }, [open])
 
+  const solid = forceSolid || scrolled || open
   const hidden = scrolled && !open
 
   const closeMenu = () => setOpen(false)
@@ -51,7 +57,7 @@ export function SiteHeader() {
       <header
         className={cn(
           'fixed top-0 left-0 right-0 z-50 border-b rounded-b-[28px] transition-all duration-500',
-          open || scrolled
+          solid
             ? 'border-primary bg-background text-primary'
             : 'border-transparent bg-transparent text-white',
         )}

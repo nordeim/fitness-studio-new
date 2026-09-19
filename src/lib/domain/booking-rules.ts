@@ -11,11 +11,16 @@ export interface BookableClass {
 
 export type BookingDenyReason = 'CAPACITY_FULL' | 'DUPLICATE'
 
-export interface BookingCheck {
-  allowed: boolean
-  reason?: BookingDenyReason
-  spotsLeft: number
+/** The member's prior booking on this class, if any row exists at all. */
+export interface ExistingBooking {
+  id: string
+  status: 'confirmed' | 'cancelled'
 }
+
+export type BookingWritePlan =
+  | { action: 'deny'; reason: BookingDenyReason; spotsLeft: number }
+  | { action: 'create'; spotsLeft: number }
+  | { action: 'reactivate'; bookingId: string; spotsLeft: number }
 
 /** Spots left, floored at zero. */
 export function spotsLeft(cls: BookableClass): number {
@@ -23,18 +28,26 @@ export function spotsLeft(cls: BookableClass): number {
 }
 
 /**
- * May this member book this class?
- * - CAPACITY_FULL when the class is at capacity
- * - DUPLICATE when the member already holds a confirmed booking
+ * How should the write transaction satisfy this booking request?
+ * - deny/DUPLICATE when the member already holds a confirmed booking
+ * - deny/CAPACITY_FULL when the class is at capacity (re-activation included)
+ * - reactivate when the member holds only a cancelled row — a fresh create
+ *   would collide with @@unique([userId, classId]), which the cancelled row
+ *   occupies forever, so the existing row flips back to confirmed instead
+ * - create when there is no prior row at all
  */
-export function checkBooking(
-  cls: BookableClass,
-  hasConfirmedBooking: boolean,
-): BookingCheck {
+export function planBookingWrite(
+  cls: BookableClass & { existing: ExistingBooking | null },
+): BookingWritePlan {
   const left = spotsLeft(cls)
-  if (hasConfirmedBooking) return { allowed: false, reason: 'DUPLICATE', spotsLeft: left }
-  if (left <= 0) return { allowed: false, reason: 'CAPACITY_FULL', spotsLeft: 0 }
-  return { allowed: true, spotsLeft: left }
+  if (cls.existing?.status === 'confirmed') {
+    return { action: 'deny', reason: 'DUPLICATE', spotsLeft: left }
+  }
+  if (left <= 0) return { action: 'deny', reason: 'CAPACITY_FULL', spotsLeft: 0 }
+  if (cls.existing?.status === 'cancelled') {
+    return { action: 'reactivate', bookingId: cls.existing.id, spotsLeft: left }
+  }
+  return { action: 'create', spotsLeft: left }
 }
 
 /** Customer-safe copy for each deny reason. */

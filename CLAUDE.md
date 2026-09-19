@@ -35,6 +35,7 @@ Production clone of `fitness-studio.base44.app` ("AURA Studio"), a women-only bo
 - Server Components by default; `"use client"` only for interactive leaves.
 - Mutations via Server Actions in `src/actions/*`, never route handlers. The only route handlers are under `src/app/api/` (scaffold health checks).
 - `revalidatePath('/classes')` + `revalidatePath('/account')` after booking mutations.
+- Toasts render through **sonner** — the root layout mounts `<Toaster />` from `sonner` (bottom-right). The shadcn `ui/toaster` is NOT mounted; calling `useToast` would be a silent no-op.
 
 ### Tailwind v4 (CSS-first)
 
@@ -48,7 +49,7 @@ Production clone of `fitness-studio.base44.app` ("AURA Studio"), a women-only bo
 
 - Schema at `prisma/schema.prisma`; push with `bun run db:push` (no migrations folder — SQLite dev flow).
 - SQLite has no arrays or enums as strings columns: `specialties`/`certifications`/`features` are JSON strings; (de)serialize ONLY via `parseJsonArray`/`serializeJsonArray`.
-- Booking writes run inside `db.$transaction`: guard (capacity + duplicate) and `spotsTaken` increment/decrement commit atomically. `@@unique([userId, classId])` backs the duplicate guard.
+- Booking writes run inside `db.$transaction`: guard (capacity + duplicate) and `spotsTaken` increment/decrement commit atomically. `@@unique([userId, classId])` backs the duplicate guard — and because a cancelled row keeps occupying that key forever, `planBookingWrite` (`lib/domain/booking-rules.ts`) plans a **reactivate** (row update) instead of a create when the member re-books a previously cancelled class.
 - Seed (`scripts/seed.ts`) is idempotent — instructor/membership upserts by stable id, classes by natural key (title + day + startTime). Safe to re-run.
 
 ### Authentication
@@ -87,8 +88,8 @@ Clean check order: `bun run lint && bun run test`.
 
 | Level | Tool | Location | Notes |
 |---|---|---|---|
-| Unit | Vitest | `tests/domain.test.ts` | Filters, schedule sorting, time formatting, booking rules, cancellation window, money, JSON columns, discipline-wheel rotation |
-| E2E (manual) | Browser | — | Golden path: sign-up → filter schedule → book → verify "Booked ✓" → cancel from /account |
+| Unit | Vitest | `tests/domain.test.ts` | Filters, schedule sorting, time formatting, booking write plans (create/deny/re-activate), cancellation window, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy |
+| E2E (manual) | Browser | — | Golden path: sign-up → filter schedule → book → verify "Booked ✓" + toast → cancel from /account → re-book (re-activation) |
 
 - Expected values in tests are worked examples (e.g. `formatTimeClock('18:45') === '6:45 PM'`), never recomputed by the same code under test.
 - New pure logic lands in `lib/domain/` with tests; a red test is a regression or a wrong test — never skip to pass.

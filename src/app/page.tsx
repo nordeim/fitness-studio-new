@@ -5,27 +5,9 @@ import { AuraButton } from '@/components/site/aura-button'
 import { DisciplinesSection } from '@/components/site/disciplines-section'
 import { BenefitsCarousel } from '@/components/site/benefits-carousel'
 import { CoachesSection } from '@/components/site/coaches-section'
+import { TestimonialsSection } from '@/components/site/testimonials-section'
 import { GallerySection } from '@/components/site/gallery-section'
 import { db } from '@/lib/db'
-
-const TESTIMONIALS = [
-  {
-    quote:
-      'Sovereign didn\u2019t just change my body \u2014 it rewired my entire relationship with strength. I walk taller now.',
-    name: 'Jordan K.',
-    result: 'Lost 30 lbs in 4 months',
-  },
-  {
-    quote: 'The coaches here see something in you before you see it yourself. That\u2019s the magic of this place.',
-    name: 'Priya M.',
-    result: 'Completed first marathon',
-  },
-  {
-    quote: 'After years of pain, the Pilates program gave me my mobility back. I\u2019m stronger at 45 than I was at 25.',
-    name: 'Lena R.',
-    result: 'Overcame chronic back pain',
-  },
-] as const
 
 /** Per-letter hero reveal, staggered like the source. */
 function HeroWord({ word, className }: { word: string; className?: string }) {
@@ -214,6 +196,12 @@ export default async function HomePage() {
               className="object-cover"
             />
             <div className="absolute inset-0 bg-black/50" />
+            {/* kicker bar first in the DOM — matches the source reading order */}
+            <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-gradient-to-t from-black/80 to-transparent py-8">
+              <p className="font-body text-[0.65rem] uppercase tracking-[0.3em] text-white md:text-xs">
+                Move beautifully. Live powerfully.
+              </p>
+            </div>
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-56 md:flex-row md:gap-16">
               <h2 className="font-heading select-none text-3xl font-thin italic tracking-tight text-primary-foreground md:text-5xl">
                 Inhale
@@ -248,11 +236,6 @@ export default async function HomePage() {
                 Exhale
               </h2>
             </div>
-            <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-gradient-to-t from-black/80 to-transparent py-8">
-              <p className="font-body text-[0.65rem] uppercase tracking-[0.3em] text-white md:text-xs">
-                Move beautifully. Live powerfully.
-              </p>
-            </div>
           </div>
         </section>
 
@@ -262,43 +245,8 @@ export default async function HomePage() {
         {/* ============ COACHES (accordion) ============ */}
         <CoachesSection coaches={instructors} />
 
-        {/* ============ TESTIMONIALS ============ */}
-        <section aria-labelledby="proof" className="relative overflow-hidden">
-          <div className="container-aura">
-            <div className="mb-16">
-              <p className="kicker mb-4 text-primary">Proof of power</p>
-              <h2
-                id="proof"
-                className="font-heading text-3xl font-light leading-tight tracking-tight text-primary md:text-5xl"
-              >
-                Their words, their results
-              </h2>
-            </div>
-            <div className="grid gap-6 pb-24 md:grid-cols-3 md:pb-32">
-              {TESTIMONIALS.map((t, i) => (
-                <figure
-                  key={t.name}
-                  className="flex h-full flex-col justify-between bg-white p-8 shadow-[rgba(230,146,76,0.12)_0_12px_20px_4px] rounded-xl"
-                >
-                  <div>
-                    <span className="font-body text-xs font-semibold tracking-[0.2em] text-primary">
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <blockquote className="mt-6">
-                      <p className="font-heading text-base font-extralight italic leading-relaxed text-primary md:text-lg">
-                        &ldquo;{t.quote}&rdquo;
-                      </p>
-                    </blockquote>
-                  </div>
-                  <figcaption className="mt-8 border-t border-border/50 pt-3">
-                    <p className="font-body text-sm font-medium text-primary">{t.name}</p>
-                    <p className="mt-1 text-xs tracking-wide text-primary">{t.result}</p>
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* ============ TESTIMONIALS (photo band + flip cards) ============ */}
+        <TestimonialsSection />
 
         {/* ============ GALLERY (collage + lightbox) ============ */}
         <GallerySection />

@@ -11,7 +11,7 @@ Run from the repo root. Bun is the package manager — use `bun`, never `npm`/`y
 | `bun install` | Install dependencies |
 | `bun run dev` | Dev server on :3000 (Turbopack) |
 | `bun run lint` | ESLint 9 (flat config) — must exit clean |
-| `bun run test` | Vitest domain suite (24 tests) |
+| `bun run test` | Vitest domain suite (32 tests) |
 | `bun run db:push` | Push `prisma/schema.prisma` to SQLite (creates `db/custom.db`) |
 | `bun run scripts/seed.ts` | Idempotent seed: 4 instructors, 3 memberships, 27 classes |
 | `bun run build` | Production build |
@@ -24,7 +24,7 @@ A clean check is: `bun run lint && bun run test`. Fresh-clone bootstrap: `cp .en
 - **Mutations go through Server Actions in `src/actions/`** that return `ActionResult<T>` from `@/lib/result` — never throw across the client boundary, never REST endpoints for UI mutations.
 - **Domain logic is pure and lives in `src/lib/domain/`** (`class-filters.ts`, `booking-rules.ts`) — no I/O, no Prisma imports; this is the unit-tested seam.
 - **Money is integer minor units (cents)** everywhere. `formatMoney(2800) === "$28"`. Floats never touch money paths.
-- **Booking capacity + duplicate checks run inside `db.$transaction`** in `src/actions/bookings.ts` — the read of `spotsTaken`, the guard, and the increment are one transaction; `@@unique([userId, classId])` is the last-line defense.
+- **Booking capacity + duplicate checks run inside `db.$transaction`** in `src/actions/bookings.ts` — the read of `spotsTaken`, the guard, and the increment are one transaction; `@@unique([userId, classId])` is the last-line defense. **Re-booking after cancellation re-activates the cancelled row** (`planBookingWrite` in `lib/domain/booking-rules.ts` returns `reactivate`) — a fresh `create` would collide with the unique key the cancelled row occupies forever.
 - **Dependency direction**: `app/ → components/ → lib/domain/ → lib/db`. `lib/domain` must not import the db client (it stays pure/testable).
 
 ## Framework quirks (verified the hard way)
@@ -35,7 +35,7 @@ A clean check is: `bun run lint && bun run test`. Fresh-clone bootstrap: `cp .en
 - **Tailwind v4 CSS-first**: design tokens live in `src/app/globals.css` `:root` as HSL values extracted from the source site (`--primary: hsl(21 93% 13%)` = espresso `#411401`). There is no `tailwind.config.js` theme extension; `font-heading`/`kicker`/`container-aura`/`coach-panel`/`.animate-breathe`/`.animate-gradientShift` utilities are defined in `globals.css` `@layer utilities`.
 - **Source-measured design system** (session 2 parity pass): buttons are `rounded` (6px), `px-6 py-2.5 text-xs tracking-[0.1em]` easing to `0.2em` on hover with an arrow-up-right glyph (`AuraButton`). Page/section headings are Taviraj `font-light` (hero display: `font-extralight`) — **not italic** (only testimonial quotes and Inhale/Exhale are italic). Sections use `max-w-[1400px] mx-auto` with `px-6 md:px-[8vw]` gutters (the `.container-aura` utility).
 - **Header is fixed with hide-on-scroll** (`src/components/site/header.tsx`): transparent/white over each page's espresso hero band; past 64px of scroll it swaps to cream+espresso and slides out (`translateY(-100%)`). The menu is a cream dropdown panel (Taviraj 28px links + Book-a-class button + studio hours). While the source leaves the wordmark white-on-cream (near-invisible) when open, the clone switches the chrome to espresso — documented deviation.
-- **The home page's signature interactions** are measured rebuilds: the disciplines **dial** (sticky circular scrollspy selector; pure math in `lib/domain/discipline-wheel.ts`, click scrolls to the card), the **coverflow** benefits carousel (translateX ±340/680/1020, scale 0.92/0.84/0.76), the **coaches accordion** (springs to 807px with `cubic-bezier(0.34,1.56,0.64,1)`), and the **gallery collage** (absolute %-positioned photos, mask-image fades, mouse parallax, lightbox with prev/next/close).
+- **The home page's signature interactions** are measured rebuilds: the disciplines **dial** (sticky circular scrollspy selector; pure math in `lib/domain/discipline-wheel.ts`, click scrolls to the card) with the right-aligned **All classes** button under the card stack, the **coverflow** benefits carousel (translateX ±340/680/1020, scale 0.92/0.84/0.76), the **coaches accordion** (springs to 807px with `cubic-bezier(0.34,1.56,0.64,1)`), the **testimonial spotlight** (photo band under bg-black/20, white kicker/h2, three 260px flip-cards — a ~3s-slot rotation lights one quote at a time while the others dissolve to giant Taviraj numbers; hover/focus freezes the cycle on that card; math in `lib/domain/testimonial-spotlight.ts`), and the **gallery collage** (absolute %-positioned photos, mask-image fades, mouse parallax, lightbox with prev/next/close).
 - **Fonts**: Taviraj (headings) + Inter (body) via `next/font/google` with CSS variables `--font-heading`/`--font-body` — do not import Google Fonts via `<link>`.
 - **`react-hooks/set-state-in-effect` is enforced**: closing the header menu on navigation is done via per-link `onClick` handlers, not an effect watching `usePathname`.
 - **Images** ship as optimized JPGs in `public/images/` (source PNGs were 41 MB; optimized to 3 MB at 1600px/q82). Use `next/image` with `fill` + `sizes`; the hero is the LCP — keep `priority` on it.
@@ -49,12 +49,14 @@ A clean check is: `bun run lint && bun run test`. Fresh-clone bootstrap: `cp .en
 - Sign-in/sign-up validation errors flow through `toFieldErrors(zodError)` into `ActionResult.error.fieldErrors`; the client maps them to per-field `role="alert"` text.
 - The class schedule's filter rails sync to the URL query (`?type=YOGA&day=MONDAY`) — filters are server-rendered from `searchParams`, and `normalizeFilters` case-insensitively normalizes values (the source links in with `?type=Yoga`) and fails open on unknown enum values (renders all classes rather than 500).
 - **Legal pages live at `/privacy`, `/terms`, `/accessibility`** (the source's routes). The legacy `/legal/*` paths `permanentRedirect` to them.
+- **The 404 matches the source's platform screen**: slate-50 field, slate-300 digits, "Page Not Found", the quoted offending path (`formatNotFoundCopy` in `lib/domain/not-found.ts`, read client-side via `usePathname`), white Go Home button — wrapped in AURA chrome. The header takes `forceSolid` there (the source's transparent+white wordmark over the light field is invisible).
+- **Toasts are sonner** — the root layout mounts `<Toaster />` from `sonner`; every `toast()` call in site components renders there. Do not mount the shadcn `ui/toaster` instead (that was the bug: two disjoint systems, zero feedback).
 - Every inner page opens with an espresso hero band (`bg-primary pt-36/44 pb-20/28`) carrying kicker + h1 — the header assumes it (white wordmark over the dark band).
 - Lint ignores `scratch/`, `docs/`, `skills/`, `examples/` (reference material, not app code — `eslint.config.mjs` `ignores`).
 
 ## Testing
 
-- `bun run test` (or `bunx vitest run tests/domain.test.ts`) — pure domain tests (filters, booking rules, money, JSON columns, discipline-wheel rotation); expected values are worked examples, never recomputed by the code under test. `vitest.config.ts` scopes the run to `tests/` and excludes `scratch/`.
+- `bun run test` (or `bunx vitest run tests/domain.test.ts`) — pure domain tests (filters, booking write plans incl. re-activation, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy); expected values are worked examples, never recomputed by the code under test. `vitest.config.ts` scopes the run to `tests/` and excludes `scratch/`.
 - New domain logic goes in `lib/domain/` with tests in `tests/domain.test.ts`. Actions/pages are verified with the browser (agent-browser flow: sign-up → book → cancel is the golden path).
 
 ## Environment

@@ -20,13 +20,18 @@ import {
   durationMinutes,
 } from '../src/lib/domain/class-filters'
 import {
-  checkBooking,
+  planBookingWrite,
   spotsLeft,
   bookingDenyMessage,
   checkCancellation,
   formatMoney,
   parseJsonArray,
 } from '../src/lib/domain/booking-rules'
+import { formatNotFoundCopy } from '../src/lib/domain/not-found'
+import {
+  quoteFaceVisible,
+  nextActive,
+} from '../src/lib/domain/testimonial-spotlight'
 
 describe('normalizeFilters', () => {
   it('treats missing, empty, and "ALL" as no constraint', () => {
@@ -120,23 +125,48 @@ describe('schedule ordering and labels', () => {
 })
 
 describe('booking rules', () => {
-  it('allows booking when spots remain and no duplicate', () => {
-    expect(checkBooking({ capacity: 16, spotsTaken: 15 }, false)).toEqual({
-      allowed: true,
+  it('plans a create when spots remain and no prior booking', () => {
+    expect(planBookingWrite({ capacity: 16, spotsTaken: 15, existing: null })).toEqual({
+      action: 'create',
       spotsLeft: 1,
     })
   })
 
   it('denies at capacity', () => {
-    const check = checkBooking({ capacity: 16, spotsTaken: 16 }, false)
-    expect(check.allowed).toBe(false)
-    expect(check.reason).toBe('CAPACITY_FULL')
-    expect(check.spotsLeft).toBe(0)
+    const plan = planBookingWrite({ capacity: 16, spotsTaken: 16, existing: null })
+    expect(plan.action).toBe('deny')
+    expect(plan.action === 'deny' && plan.reason).toBe('CAPACITY_FULL')
+    expect(plan.spotsLeft).toBe(0)
   })
 
   it('duplicate wins over capacity (already booked means already booked)', () => {
-    const check = checkBooking({ capacity: 16, spotsTaken: 16 }, true)
-    expect(check.reason).toBe('DUPLICATE')
+    const plan = planBookingWrite({
+      capacity: 16,
+      spotsTaken: 16,
+      existing: { id: 'b1', status: 'confirmed' },
+    })
+    expect(plan.action === 'deny' && plan.reason).toBe('DUPLICATE')
+  })
+
+  it('re-activates a cancelled booking instead of colliding with the unique constraint', () => {
+    // regression: a cancelled row occupies @@unique([userId, classId]) forever,
+    // so a fresh create crashes with P2002 — the plan must reactivate instead
+    const plan = planBookingWrite({
+      capacity: 16,
+      spotsTaken: 10,
+      existing: { id: 'b7', status: 'cancelled' },
+    })
+    expect(plan).toEqual({ action: 'reactivate', bookingId: 'b7', spotsLeft: 6 })
+  })
+
+  it('still denies re-activation when the class has since filled', () => {
+    const plan = planBookingWrite({
+      capacity: 16,
+      spotsTaken: 16,
+      existing: { id: 'b7', status: 'cancelled' },
+    })
+    expect(plan.action).toBe('deny')
+    expect(plan.action === 'deny' && plan.reason).toBe('CAPACITY_FULL')
   })
 
   it('spotsLeft floors at zero (never negative)', () => {
@@ -202,5 +232,53 @@ describe('discipline wheel rotation (measured from source dial)', () => {
     // 3 -> 0 wraps counterclockwise (-90), 0 -> 3 wraps clockwise (+90)
     expect(shortestRotationDelta(3, 0, 4)).toBe(-90)
     expect(shortestRotationDelta(0, 3, 4)).toBe(90)
+  })
+})
+
+describe('not-found copy (measured from the source 404)', () => {
+  it('quotes the offending path in the platform message', () => {
+    expect(formatNotFoundCopy('/does-not-exist')).toBe(
+      'The page "/does-not-exist" could not be found in this application.',
+    )
+    expect(formatNotFoundCopy('/classes/yoga')).toBe(
+      'The page "/classes/yoga" could not be found in this application.',
+    )
+  })
+
+  it('handles bare and root paths without double slashes', () => {
+    expect(formatNotFoundCopy('does-not-exist')).toBe(
+      'The page "does-not-exist" could not be found in this application.',
+    )
+    expect(formatNotFoundCopy('')).toBe(
+      'The page "" could not be found in this application.',
+    )
+  })
+})
+
+describe('testimonial spotlight (measured from the source rotation)', () => {
+  it('shows every quote before the band is revealed', () => {
+    for (const i of [0, 1, 2]) {
+      expect(quoteFaceVisible(i, { revealed: false, active: 0, hovered: null })).toBe(true)
+    }
+  })
+
+  it('shows only the active card’s quote while rotating', () => {
+    // active 1 → card 1 quote, cards 0 and 2 numbers
+    expect(quoteFaceVisible(0, { revealed: true, active: 1, hovered: null })).toBe(false)
+    expect(quoteFaceVisible(1, { revealed: true, active: 1, hovered: null })).toBe(true)
+    expect(quoteFaceVisible(2, { revealed: true, active: 1, hovered: null })).toBe(false)
+  })
+
+  it('freezes on the hovered card and hides the rest, active notwithstanding', () => {
+    const state = { revealed: true, active: 2, hovered: 0 }
+    expect(quoteFaceVisible(0, state)).toBe(true)
+    expect(quoteFaceVisible(1, state)).toBe(false)
+    expect(quoteFaceVisible(2, state)).toBe(false) // active loses to hovered
+  })
+
+  it('advances the spotlight forward and wraps', () => {
+    expect(nextActive(0, 3)).toBe(1)
+    expect(nextActive(1, 3)).toBe(2)
+    expect(nextActive(2, 3)).toBe(0)
   })
 })

@@ -165,7 +165,7 @@ export function SiteFooter() {
 
       <div className="px-6 pb-8 md:px-[8vw]">
         <div className="flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-6 text-xs opacity-70 md:flex-row">
-          <p>© {new Date().getFullYear()} AURA Studio. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} AURA Studio. Built on Base44.</p>
           <nav aria-label="Legal" className="flex gap-6">
             <Link href="/privacy" className="transition-opacity hover:opacity-70">
               Privacy Policy

@@ -28,8 +28,7 @@ export interface CoachCardData {
  */
 export function CoachesSection({ coaches }: { coaches: CoachCardData[] }) {
   const [active, setActive] = useState(0)
-  const [lead, ...rest] = coaches
-  if (!lead) return null
+  if (coaches.length === 0) return null
 
   return (
     <section aria-labelledby="coaches" className="rounded-b-[28px] py-24 md:py-32">
@@ -160,8 +159,6 @@ export function CoachesSection({ coaches }: { coaches: CoachCardData[] }) {
           ))}
         </div>
 
-        {/* keep `rest` referenced for type-narrowing clarity */}
-        <span className="sr-only">{rest.length} additional coaches on the instructors page</span>
       </div>
     </section>
   )

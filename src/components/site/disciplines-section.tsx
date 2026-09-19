@@ -188,6 +188,21 @@ export function DisciplinesSection() {
             </div>
           ))}
         </div>
+
+        {/* All classes — right-aligned under the stack, measured off the source */}
+        <div className="mt-10 flex justify-end">
+          <Link
+            href="/classes"
+            className="group inline-flex items-center gap-2 rounded bg-primary px-6 py-2.5 font-body text-xs font-medium uppercase tracking-[0.1em] text-primary-foreground transition-all duration-300 hover:tracking-[0.2em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            All classes
+            <ArrowUpRight
+              className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+          </Link>
+        </div>
       </div>
     </section>
   )

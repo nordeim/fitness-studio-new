@@ -17,15 +17,15 @@ The original is a Base44 template app: a women-only fitness studio marketing sit
 
 | ✨ | Feature | What it does |
 |---|---|---|
-| 🏠 | **Marketing home** | Hero, free-week CTA, circular discipline dial (scrollspy), sky banner, coverflow benefits, coaches accordion, testimonials, gallery collage with lightbox |
+| 🏠 | **Marketing home** | Hero, free-week CTA, circular discipline dial (scrollspy + All-classes CTA), sky banner, coverflow benefits, coaches accordion, testimonial spotlight (photo band with rotating flip-cards), gallery collage with lightbox |
 | 📅 | **Class schedule** | TYPE / INTENSITY / DAY pill filters synced to the URL, live spots-left, empty state with clear-filters |
 | 🔐 | **Email auth** | Sign-up / sign-in / password-reset with scrypt hashing and HMAC-fingerprinted session tokens |
-| 📝 | **Transactional bookings** | Capacity + duplicate guards inside one DB transaction; book & cancel from the schedule and account page |
+| 📝 | **Transactional bookings** | Capacity + duplicate guards inside one DB transaction; book & cancel from the schedule and account page; re-booking a cancelled class re-activates the row (unique-key safe) |
 | 💳 | **Pricing & memberships** | Seeded membership plans, class packs, policy pages |
 | 🧑‍🏫 | **Instructor profiles** | Bios, specialties, certifications from the database |
 | ♿ | **Accessibility** | WCAG 2.2 AA targets, keyboard-navigable carousel + lightbox, reduced-motion support |
-| 🧪 | **Tested domain layer** | 24 Vitest tests over the pure booking/filter/money/dial-rotation logic |
-| 🧭 | **Source-measured UI** | Fixed hide-on-scroll header, espresso page bands, branded 404, legal pages at `/privacy` `/terms` `/accessibility` |
+| 🧪 | **Tested domain layer** | 32 Vitest tests over the pure booking-write-plan/filter/money/dial-rotation/spotlight/404-copy logic |
+| 🧭 | **Source-measured UI** | Fixed hide-on-scroll header, espresso page bands, source-matched 404 (slate platform screen in AURA chrome), legal pages at `/privacy` `/terms` `/accessibility` |
 
 ## Architecture
 
@@ -62,17 +62,19 @@ flowchart TB
   📂 app/              ← Routes: /, /classes, /pricing, /instructors, /login, /account,
   │                      /privacy, /terms, /accessibility (+ /legal/* redirects), not-found
   📂 components/site/  ← Header (fixed, hide-on-scroll, cream menu), footer, dial, coverflow,
-  │                      accordion, collage + lightbox, schedule browser, auth card
+  │                      accordion, testimonial spotlight, collage + lightbox,
+  │                      schedule browser, auth card
   📂 lib/
     📂 auth/           ← scrypt passwords, HMAC session tokens
-    📂 domain/         ← Pure logic: class-filters, booking-rules, discipline-wheel (tested seam)
+    📂 domain/         ← Pure logic: class-filters, booking-rules (write plans),
+    │                     discipline-wheel, testimonial-spotlight, not-found (tested seam)
     📄 result.ts       ← ActionResult<T> contract
     📄 validation.ts   ← Zod schemas
   📄 app/globals.css   ← Design tokens (HSL) + custom utilities + keyframes
 📂 prisma/schema.prisma ← User, Session, StudioClass, Instructor, Membership, Booking
 📂 public/images/       ← Optimized photography (1600px, q82) incl. footer/packs backdrops
 📂 scripts/seed.ts      ← Idempotent seed
-📂 tests/domain.test.ts ← Vitest suite (24 tests)
+📂 tests/domain.test.ts ← Vitest suite (32 tests)
 📂 vitest.config.ts     ← Scopes the suite to tests/ (excludes scratch/)
 📂 docs/                ← SSH push runbook + wrapper (repo ops)
 📂 skills/              ← Documentation-generation skills used for this repo's docs
@@ -110,7 +112,7 @@ Requirements: **Bun ≥ 1.1** (or Node ≥ 20 with npm — commands below are bu
 - `/classes` lists 27 seeded classes; clicking **YOGA** narrows to 8 and the URL becomes `/classes?type=YOGA` (values are case-insensitive — the home page links in as `?type=Yoga`).
 - `/login` → **Create an account** → book any class → **My Bookings** shows it; cancel works.
 - `/privacy`, `/terms`, `/accessibility` render the legal pages; `/legal/*` permanently redirects to them; any unknown URL renders the branded 404.
-- `bun run lint && bun run test` → ESLint clean, 24/24 tests pass.
+- `bun run lint && bun run test` → ESLint clean, 32/32 tests pass.
 
 ## Environment Variables
 
@@ -126,7 +128,7 @@ bun run test                     # full suite
 bunx vitest run tests/domain.test.ts --reporter verbose
 ```
 
-The suite covers: filter normalization (ALL/absent/unknown/case-insensitive values), schedule sorting, 12-hour clock formatting, booking capacity/duplicate rules, the 2-hour cancellation window, money formatting (integer cents), defensive JSON-column parsing, and the discipline-dial rotation math (label angles, dial counter-rotation, shortest-path deltas).
+The suite covers: filter normalization (ALL/absent/unknown/case-insensitive values), schedule sorting, 12-hour clock formatting, booking write plans (create / deny DUPLICATE / deny CAPACITY_FULL / re-activate a cancelled row), the 2-hour cancellation window, money formatting (integer cents), defensive JSON-column parsing, the discipline-dial rotation math (label angles, dial counter-rotation, shortest-path deltas), the testimonial spotlight state machine, and the 404 quoted-path copy.
 
 ## Design System
 

@@ -424,7 +424,7 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 | Gradient B | `to bottom, #F0EFE9 → #FFFAA4` | Benefits field ("Built different") | decorative |
 | Free-week glow | `to top, #F6BF8E → #FFFAA4`, blur(60px), ellipse rising from the bottom | Home "Your first week free" backdrop | decorative |
 | Coach panel | `#DAC2B9 → #F0EFE9` | Accordion info panels + instructor cards | decorative |
-| Photo backdrops | `footer-bg.jpg` (footer), `packs-bg.jpg` (class packs) | Full-bleed photography under soft dark washes | decorative |
+| Photo backdrops | `footer-bg.jpg` (footer), `packs-bg.jpg` (class packs), `testimonials-bg.jpg` (Proof-of-Power band under `bg-black/20`) | Full-bleed photography under soft dark washes | decorative |
 
 ### 5.3 Component Primitives
 
@@ -432,7 +432,9 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 - Header — `fixed top-0`, h-16, centered Taviraj wordmark running the 7.2s breathe pulse, custom three-line burger (w-6/w-6/w-4 hairlines) on the right. Transparent + white over each page's espresso hero band; past 64px of scroll it swaps to cream+espresso and slides out (`translateY(-100%)`, opacity 0), returning at the top. Menu = cream dropdown panel (Taviraj 28px links, solid Book-a-class button, studio hours; a discreet "Sign in / My bookings" link is the clone's functional addition).
 - Filter rails — `aria-pressed` rounded-full pill toggles; selected = espresso fill.
 - Cards — `rounded-xl`/`rounded-2xl` with 1px `--border`/50; intensity badges color-coded (LOW butter / MEDIUM terracotta / HIGH destructive); benefit cards carry the warm shadow `rgba(230,146,76,0.12) 0 12px 20px 4px`.
-- Discipline dial — sticky circular selector; labels at `index × 90°` ride the circle, dial counter-rotates `-(active × 90°)` (accumulated via shortest-path deltas), click scrolls to the matching card (scrollspy via IntersectionObserver).
+- Discipline dial — sticky circular selector; labels at `index × 90°` ride the circle, dial counter-rotates `-(active × 90°)` (accumulated via shortest-path deltas), click scrolls to the matching card (scrollspy via IntersectionObserver). Below the card stack, a right-aligned **All classes** dark AuraButton (measured: 115px off the right gutter at 1440px) links to `/classes`.
+- Testimonial spotlight — the source's PROOF OF POWER band: full-bleed photo under `bg-black/20`, **white** kicker/h2, three 260px `rounded-2xl` cards on a `gap-[26px]` grid. Before the band enters the viewport every card shows its quote face (cream card, Taviraj-200 italic quote, name + result over a hairline rule). Once revealed (IntersectionObserver, skipped under reduced motion), a ~3s-slot rotation lights one card's quote at a time while the other two dissolve to giant Taviraj-200 cream numbers (`1`/`2`/`3`, 60px) over the photo with a cream hairline border — both layers crossfading 1200ms ease-in-out. Hover or keyboard focus freezes the cycle on that card (only its quote visible, active index notwithstanding). State math in `lib/domain/testimonial-spotlight.ts` (tested); the number spans are `aria-hidden`.
+- 404 screen — the source renders its platform's default NotFound inside the AURA chrome: a `slate-50` field, `text-7xl font-light text-slate-300` digits, a `w-16 bg-slate-200` rule, "Page Not Found" (`text-2xl font-medium text-slate-800`), the quoted offending path (`formatNotFoundCopy`, read client-side via `usePathname` in `not-found-message.tsx`), and a white `Go Home` button (`border-slate-200`, home icon, `text-sm font-medium text-slate-700`). The header takes `forceSolid` on this page — the source's transparent+white wordmark over the light field is invisible (a source bug we fix, consistent with the menu-chrome fix).
 - Coaches accordion — 351px cards in a row; the active card springs to ~807px (`cubic-bezier(0.34,1.56,0.64,1)`, 0.5s) revealing the gradient info panel; odd cards mirror (row-reverse).
 - Gallery collage — 285px-wide photos placed by left/top %, mask-image bottom fades, mouse parallax (per-image depth), lightbox (`bg-black/80`, prev/next/close, Escape/arrow keys).
 
@@ -503,7 +505,7 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 
 | Category | Files | Tests | Location | Framework |
 |---|---|---|---|---|
-| Domain unit | 1 | 24 | `tests/domain.test.ts` | Vitest |
+| Domain unit | 1 | 32 | `tests/domain.test.ts` | Vitest |
 | E2E golden path (manual/browser) | — | — | browser session | agent-browser |
 
 ### 7.2 Test Patterns
@@ -511,7 +513,8 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 - **Worked-example assertions:** expected values are literals derived independently (`formatTimeClock('18:45') === '6:45 PM'`, `durationMinutes('23:00','00:30') === 90`), never computed by the code under test.
 - **Boundary coverage:** capacity exactly-0, spots over capacity (floors at 0), cancellation at exactly the 2-hour window, midnight/noon clock formats, malformed time strings pass through unchanged.
 - **Failure-path coverage:** duplicate-vs-capacity precedence, unknown enum values, malformed JSON columns, non-string array members.
-- **Golden path (browser-verified):** sign-up → filter schedule (`?type=YOGA` shows exactly the 8 yoga classes) → book (spots 7→6, "BOOKED ✓") → verify on `/account` → cancel (booking removed, spot released). This exact sequence was executed and observed during the build.
+- **Re-booking regression (session 4):** a cancelled row occupies `@@unique([userId, classId])` forever, so `planBookingWrite` must plan a **reactivate** (row update), not a create — the test pins the plan (`reactivate`, bookingId, spotsLeft) and the deny-when-since-filled case.
+- **Golden path (browser-verified):** sign-up → filter schedule (`?type=YOGA` shows exactly the 8 yoga classes) → book (spots 7→6, "BOOKED ✓", sonner toast) → verify on `/account` → cancel (booking removed, spot released, toast) → **re-book the same class** (cancelled row re-activated, spots 9→10). This exact sequence was executed and observed during the session-4 build.
 
 ### 7.3 Coverage Thresholds
 
@@ -520,8 +523,8 @@ The pure domain seam (`src/lib/domain/`) is at 100% branch coverage by its test 
 ### 7.4 Pre-PR / Pre-Deploy Checklist
 
 - [ ] `bun run lint` exits clean
-- [ ] `bun run test` — 24/24 pass
-- [ ] `bun run dev` boots; golden path (sign-up → book → cancel) exercised in the browser
+- [ ] `bun run test` — 32/32 pass
+- [ ] `bun run dev` boots; golden path (sign-up → book → cancel → re-book) exercised in the browser
 - [ ] No `.env`, `db/*.db`, or key material staged (`git status` hygiene)
 - [ ] New domain logic arrived with tests in `tests/domain.test.ts`
 
@@ -603,6 +606,10 @@ bun run dev                 # http://localhost:3000
 | LOW | No numeric coverage gate | Coverage is enforced by convention (§7.3) | Open — `vitest --coverage` + thresholds once CI exists |
 | LOW | Legal copy is original (privacy/terms/accessibility) rather than the source's | Content parity gap; source pages are Base44 placeholder boilerplate | Accepted — original copy is accurate to this implementation, which is the honest choice |
 | LOW | Header chrome switches to espresso while the source stays white over its cream menu | Visual deviation from the source's near-invisible white-on-cream wordmark | Accepted (accessibility fix) — the close control must stay visible; documented in AGENTS.md |
+| LOW | 404 header uses `forceSolid` (cream+espresso) while the source's is transparent+white over the slate field | The source's wordmark is invisible on its own 404 (platform chrome bug) | Accepted (accessibility fix) — same rationale as the menu-chrome fix |
+| LOW | Menu carries a "Sign in / My bookings" link and the footer a "My Bookings" link; `/login` redirects authenticated users to `/account` | The source exposes no account entry points at all (its auth gates nothing; all its data collections are empty) | Accepted (functional necessity) — the clone's booking requires auth, so the entry points must be discoverable; `/login` redirect is standard UX |
+| — | **Fixed in session 4:** re-booking a cancelled class crashed with Prisma P2002 (`@@unique([userId, classId])` is occupied forever by the cancelled row) | Members could never re-book a class they had cancelled | Resolved — `planBookingWrite` plans a row re-activation inside the same transaction; regression-tested |
+| — | **Fixed in session 4:** no toast ever rendered (root layout mounted the shadcn `ui/toaster` while every component calls sonner's `toast`) | Silent success/failure on booking, cancellation, and auth flows | Resolved — the layout mounts sonner's `<Toaster />` (bottom-right) |
 
 ---
 
@@ -613,8 +620,10 @@ bun run dev                 # http://localhost:3000
 | `prisma/schema.prisma` | ~120 | Six models; the integrity backbone (unique constraints, relations) |
 | `src/lib/result.ts` | ~55 | The ActionResult contract every mutation returns |
 | `src/lib/domain/class-filters.ts` | ~130 | Filter normalization (case-insensitive)/sorting/time formatting — the pure seam |
-| `src/lib/domain/booking-rules.ts` | ~95 | Booking guards, cancellation window, integer money, JSON columns |
+| `src/lib/domain/booking-rules.ts` | ~105 | Booking write plans (create/deny/re-activate), cancellation window, integer money, JSON columns |
 | `src/lib/domain/discipline-wheel.ts` | ~40 | Dial math: labelAngle / wheelRotation / shortestRotationDelta |
+| `src/lib/domain/testimonial-spotlight.ts` | ~35 | Spotlight state math: quoteFaceVisible / nextActive (hover-freeze semantics) |
+| `src/lib/domain/not-found.ts` | ~10 | `formatNotFoundCopy` — the quoted-path 404 sentence |
 | `src/lib/auth/passwords.ts` | ~45 | scrypt hash/verify with parameter-carrying format |
 | `src/lib/auth/session.ts` | ~75 | Opaque-token session lifecycle with HMAC fingerprints |
 | `src/actions/auth.ts` | ~105 | signUp / signIn / signOut / requestPasswordReset |
@@ -625,10 +634,12 @@ bun run dev                 # http://localhost:3000
 | `src/components/site/header.tsx` | ~180 | Fixed hide-on-scroll chrome + cream dropdown menu |
 | `src/components/site/disciplines-section.tsx` | ~170 | Sticky circular dial (scrollspy) + stacked discipline cards |
 | `src/components/site/gallery-section.tsx` | ~190 | Scattered collage with mouse parallax + lightbox |
+| `src/components/site/testimonials-section.tsx` | ~165 | Photo band + rotating flip-card spotlight (client; engine in lib/domain) |
+| `src/app/not-found.tsx` + `not-found-message.tsx` | ~60 | Source-matched slate 404 with quoted pathname inside AURA chrome |
 | `src/components/site/auth-card.tsx` | ~250 | Three-mode auth shell with field errors |
 | `src/app/globals.css` | ~180 | Token block, utilities, keyframes, reduced-motion rules |
 | `scripts/seed.ts` | ~200 | Idempotent seed (natural-key upserts) |
-| `tests/domain.test.ts` | ~230 | 24 worked-example tests over the pure seam (incl. dial rotation) |
+| `tests/domain.test.ts` | ~260 | 32 worked-example tests over the pure seam (dial rotation, spotlight, write plans, 404 copy) |
 
 ---
 

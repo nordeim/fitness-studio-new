@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Taviraj, Inter } from 'next/font/google'
+import { Toaster } from 'sonner'
 import './globals.css'
-import { Toaster } from '@/components/ui/toaster'
 
 // AURA type system: Taviraj (light serif display) + Inter (workhorse body).
 const taviraj = Taviraj({
@@ -46,7 +46,9 @@ export default function RootLayout({
         className={`${taviraj.variable} ${inter.variable} antialiased bg-background text-foreground font-body`}
       >
         {children}
-        <Toaster />
+        {/* sonner toaster — the toast() calls in the site components
+            (schedule browser, booking rows, auth card) render here */}
+        <Toaster position="bottom-right" />
       </body>
     </html>
   )

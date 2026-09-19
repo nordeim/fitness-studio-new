@@ -9,11 +9,7 @@ import { revalidatePath } from 'next/cache'
 import { db } from '@/lib/db'
 import { err, ok, withResult, type ActionResult } from '@/lib/result'
 import { getCurrentUser } from '@/lib/auth/session'
-import {
-  checkBooking,
-  bookingDenyMessage,
-  spotsLeft,
-} from '@/lib/domain/booking-rules'
+import { planBookingWrite, bookingDenyMessage } from '@/lib/domain/booking-rules'
 import { bookingSchema, cancelBookingSchema, toFieldErrors } from '@/lib/validation'
 
 export interface BookingView {
@@ -46,24 +42,42 @@ export async function createBookingAction(
     const result = await db.$transaction(async (tx) => {
       const cls = await tx.studioClass.findUnique({
         where: { id: parsed.data.classId },
-        include: { bookings: { where: { status: 'confirmed', userId: user.id } } },
+        // any prior row — cancelled or confirmed — occupies the unique key
+        include: { bookings: { where: { userId: user.id } } },
       })
       if (!cls) return err('NOT_FOUND', 'That class no longer exists.')
 
-      const check = checkBooking(cls, cls.bookings.length > 0)
-      if (!check.allowed) {
-        const reason = check.reason
-        if (reason) return err(reason === 'DUPLICATE' ? 'CONFLICT' : 'CAPACITY_FULL', bookingDenyMessage(reason))
+      const prior = cls.bookings[0]
+      const plan = planBookingWrite({
+        capacity: cls.capacity,
+        spotsTaken: cls.spotsTaken,
+        existing: prior ? { id: prior.id, status: prior.status as 'confirmed' | 'cancelled' } : null,
+      })
+
+      if (plan.action === 'deny') {
+        return err(
+          plan.reason === 'DUPLICATE' ? 'CONFLICT' : 'CAPACITY_FULL',
+          bookingDenyMessage(plan.reason),
+        )
       }
 
-      const booking = await tx.booking.create({
-        data: { userId: user.id, classId: cls.id, status: 'confirmed' },
-      })
+      let bookingId = prior?.id ?? ''
+      if (plan.action === 'reactivate') {
+        await tx.booking.update({
+          where: { id: plan.bookingId },
+          data: { status: 'confirmed', bookingDate: new Date() },
+        })
+      } else {
+        const booking = await tx.booking.create({
+          data: { userId: user.id, classId: cls.id, status: 'confirmed' },
+        })
+        bookingId = booking.id
+      }
       await tx.studioClass.update({
         where: { id: cls.id },
         data: { spotsTaken: { increment: 1 } },
       })
-      return ok({ bookingId: booking.id, spotsLeft: check.spotsLeft })
+      return ok({ bookingId, spotsLeft: plan.spotsLeft })
     })
 
     if (result.ok) revalidatePath('/classes')
