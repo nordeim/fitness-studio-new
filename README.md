@@ -17,7 +17,7 @@ The original is a Base44 template app: a women-only fitness studio marketing sit
 
 | ✨ | Feature | What it does |
 |---|---|---|
-| 🏠 | **Marketing home** | Hero, free-week CTA, circular discipline dial (scrollspy + All-classes CTA), sky banner, coverflow benefits, coaches accordion, testimonial spotlight (photo band with rotating flip-cards), gallery collage with lightbox |
+| 🏠 | **Marketing home** | Hero, free-week CTA, circular discipline dial (scrollspy + All-classes CTA), sky banner, coverflow benefits (below-stage arrow controls + dot rail; stacked on mobile), coaches accordion (rows of two, independent per row), testimonial spotlight (photo band with rotating flip-cards), gallery collage with lightbox |
 | 📅 | **Class schedule** | TYPE / INTENSITY / DAY pill filters synced to the URL, live spots-left, empty state with clear-filters |
 | 🔐 | **Email auth** | Sign-up / sign-in / password-reset with scrypt hashing and HMAC-fingerprinted session tokens |
 | 📝 | **Transactional bookings** | Capacity + duplicate guards inside one DB transaction; book & cancel from the schedule and account page; re-booking a cancelled class re-activates the row (unique-key safe) |
@@ -25,7 +25,7 @@ The original is a Base44 template app: a women-only fitness studio marketing sit
 | 🧑‍🏫 | **Instructor profiles** | Bios, specialties, certifications from the database |
 | ♿ | **Accessibility** | WCAG 2.2 AA targets, keyboard-navigable carousel + lightbox, reduced-motion support |
 | 🧪 | **Tested domain layer** | 32 Vitest tests over the pure booking-write-plan/filter/money/dial-rotation/spotlight/404-copy logic |
-| 🧭 | **Source-measured UI** | Fixed hide-on-scroll header, espresso page bands, source-matched 404 (slate platform screen in AURA chrome), legal pages at `/privacy` `/terms` `/accessibility` |
+| 🧭 | **Source-measured UI** | Fixed hide-on-scroll header (inert closed menu), espresso page bands, source-matched 404 (slate platform screen, quoted path, full-viewport centered), legal pages at `/privacy` `/terms` `/accessibility` in the source's cream prose layout, footer with copyright hairline |
 
 ## Architecture
 
@@ -76,7 +76,8 @@ flowchart TB
 📂 scripts/seed.ts      ← Idempotent seed
 📂 tests/domain.test.ts ← Vitest suite (32 tests)
 📂 vitest.config.ts     ← Scopes the suite to tests/ (excludes scratch/)
-📂 docs/                ← SSH push runbook + wrapper (repo ops)
+📂 docs/                ← SSH push runbook + wrapper (repo ops), session logs,
+                          and screenshots/ — dev-server captures of every route
 📂 skills/              ← Documentation-generation skills used for this repo's docs
 ```
 
@@ -111,7 +112,7 @@ Requirements: **Bun ≥ 1.1** (or Node ≥ 20 with npm — commands below are bu
 - `http://localhost:3000` renders the AURA home page: hero, free-week glow, discipline dial (click a wheel label — the page scrolls to that card and the dial rotates), coverflow benefits, coach accordion (click a portrait to expand), gallery collage (click a photo for the lightbox).
 - `/classes` lists 27 seeded classes; clicking **YOGA** narrows to 8 and the URL becomes `/classes?type=YOGA` (values are case-insensitive — the home page links in as `?type=Yoga`).
 - `/login` → **Create an account** → book any class → **My Bookings** shows it; cancel works.
-- `/privacy`, `/terms`, `/accessibility` render the legal pages; `/legal/*` permanently redirects to them; any unknown URL renders the branded 404.
+- `/privacy`, `/terms`, `/accessibility` render the legal pages in the source's cream prose layout (centered `max-w-3xl` column, Title-Case serif h1, h2 sections); `/legal/*` permanently redirects to them; any unknown URL renders the source-matched slate 404 with the quoted offending path.
 - `bun run lint && bun run test` → ESLint clean, 32/32 tests pass.
 
 ## Environment Variables

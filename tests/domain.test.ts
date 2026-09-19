@@ -236,12 +236,12 @@ describe('discipline wheel rotation (measured from source dial)', () => {
 })
 
 describe('not-found copy (measured from the source 404)', () => {
-  it('quotes the offending path in the platform message', () => {
+  it('quotes the offending path without its leading slash', () => {
     expect(formatNotFoundCopy('/does-not-exist')).toBe(
-      'The page "/does-not-exist" could not be found in this application.',
+      'The page "does-not-exist" could not be found in this application.',
     )
     expect(formatNotFoundCopy('/classes/yoga')).toBe(
-      'The page "/classes/yoga" could not be found in this application.',
+      'The page "classes/yoga" could not be found in this application.',
     )
   })
 
@@ -250,6 +250,9 @@ describe('not-found copy (measured from the source 404)', () => {
       'The page "does-not-exist" could not be found in this application.',
     )
     expect(formatNotFoundCopy('')).toBe(
+      'The page "" could not be found in this application.',
+    )
+    expect(formatNotFoundCopy('/')).toBe(
       'The page "" could not be found in this application.',
     )
   })

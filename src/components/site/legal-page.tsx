@@ -7,50 +7,52 @@ export interface LegalSection {
 }
 
 /**
- * Shared legal page shell — espresso band with the "A legal disclaimer"
- * kicker (the source's page header), then the numbered prose sections in a
- * narrow measure on cream.
+ * Shared legal page shell — measured from the source's legal pages:
+ * a cream prose page (no espresso band), `max-w-3xl` centered column,
+ * modest Taviraj h1 (`text-4xl md:text-5xl font-light`), then `space-y-10`
+ * sections of h2 (`text-2xl font-light`) + body copy at `text-primary/80`.
+ *
+ * The source leaves its header transparent+white over the cream field
+ * (the wordmark is invisible — the same platform bug as its 404); we pass
+ * `forceSolid` so the chrome stays cream+espresso and the close control
+ * remains visible. Legal copy itself is original (the source ships Base44
+ * placeholder boilerplate) — a documented, accepted deviation.
  */
 export function LegalPage({
   title,
-  kicker = 'A legal disclaimer',
   effective,
   sections,
 }: {
   title: string
-  kicker?: string
   effective?: string
   sections: readonly LegalSection[]
 }) {
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <SiteHeader />
+      <SiteHeader forceSolid />
       <main className="flex-1">
-        <section className="bg-primary px-6 pb-20 pt-36 text-primary-foreground md:px-[8vw] md:pb-28 md:pt-44">
-          <div className="max-w-[1400px]">
-            <p className="kicker mb-4 opacity-60">{kicker}</p>
-            <h1 className="font-heading text-5xl font-light leading-tight md:text-7xl">
+        <div className="bg-background pb-16 pt-24">
+          <div className="mx-auto max-w-3xl px-6 md:px-[8vw]">
+            <h1 className="mb-12 font-heading text-4xl font-light leading-tight text-primary md:text-5xl">
               {title}
             </h1>
             {effective && (
-              <p className="mt-6 font-body text-sm opacity-70">Effective {effective}</p>
+              <p className="-mt-10 mb-12 text-sm text-muted-foreground">
+                Effective {effective}
+              </p>
             )}
+            <div className="space-y-10 font-body leading-relaxed text-primary/80">
+              {sections.map((s) => (
+                <section key={s.title}>
+                  <h2 className="mb-4 font-heading text-2xl font-light text-primary">
+                    {s.title}
+                  </h2>
+                  <p className="text-base leading-relaxed">{s.body}</p>
+                </section>
+              ))}
+            </div>
           </div>
-        </section>
-        <section className="px-6 py-16 md:px-[8vw] md:py-24">
-          <div className="mx-auto max-w-3xl space-y-10">
-            {sections.map((s) => (
-              <div key={s.title}>
-                <h2 className="font-heading text-2xl font-light text-primary md:text-3xl">
-                  {s.title}
-                </h2>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground md:text-base">
-                  {s.body}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
+        </div>
       </main>
       <SiteFooter />
     </div>

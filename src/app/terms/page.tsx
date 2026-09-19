@@ -38,5 +38,5 @@ const SECTIONS = [
 ] as const
 
 export default function TermsPage() {
-  return <LegalPage title="Terms & conditions" effective="January 2026" sections={SECTIONS} />
+  return <LegalPage title="Terms & Conditions" effective="January 2026" sections={SECTIONS} />
 }

@@ -111,9 +111,13 @@ export function SiteHeader({ forceSolid = false }: { forceSolid?: boolean }) {
       </header>
 
       {/* Cream dropdown menu panel (sibling, not child, so the header's
-          translate transform does not move it) */}
+          translate transform does not move it). `inert` while closed keeps
+          the hidden links out of the tab order (aria-hidden alone would
+          leave them focusable — an invisible-focus WCAG violation; the
+          source mounts the links only while open instead). */}
       <div
         aria-hidden={!open}
+        inert={!open}
         className={cn(
           'fixed left-0 right-0 top-0 z-40 overflow-hidden bg-background transition-[max-height] duration-500 ease-in-out',
           open ? 'max-h-[560px]' : 'max-h-0 pointer-events-none',

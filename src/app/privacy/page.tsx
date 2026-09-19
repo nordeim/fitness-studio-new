@@ -33,10 +33,10 @@ const SECTIONS = [
   },
   {
     title: 'Changes to this policy',
-    body: 'If we change this policy materially, we will notify account holders by email before the change takes effect. The effective date below always reflects the current version.',
+    body: 'If we change this policy materially, we will notify account holders by email before the change takes effect. The effective date on this page always reflects the current version.',
   },
 ] as const
 
 export default function PrivacyPage() {
-  return <LegalPage title="Privacy policy" effective="January 2026" sections={SECTIONS} />
+  return <LegalPage title="Privacy Policy" effective="January 2026" sections={SECTIONS} />
 }

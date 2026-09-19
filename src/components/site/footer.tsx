@@ -161,12 +161,12 @@ export function SiteFooter() {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="px-6 pb-8 md:px-[8vw]">
-        <div className="flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-6 text-xs opacity-70 md:flex-row">
+        {/* Copyright row — measured from the source: inside the columns'
+            container, mt-16 above a cream 90% hairline, legal links stack
+            on mobile (flex-col md:flex-row), full-opacity text-xs. */}
+        <div className="mt-16 flex flex-col items-start justify-between gap-4 border-t border-[#F0EFE9]/90 pt-8 text-xs md:flex-row md:items-center">
           <p>© {new Date().getFullYear()} AURA Studio. Built on Base44.</p>
-          <nav aria-label="Legal" className="flex gap-6">
+          <nav aria-label="Legal" className="flex flex-col gap-6 md:flex-row md:gap-6">
             <Link href="/privacy" className="transition-opacity hover:opacity-70">
               Privacy Policy
             </Link>

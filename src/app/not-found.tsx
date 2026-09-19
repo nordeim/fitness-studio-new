@@ -18,7 +18,7 @@ export default function NotFound() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <SiteHeader forceSolid />
-      <main className="flex flex-1 items-center justify-center bg-slate-50 px-6 py-32">
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
         <div className="w-full max-w-md text-center">
           <div className="space-y-2">
             <h1 className="text-7xl font-light text-slate-300">404</h1>

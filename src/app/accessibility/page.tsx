@@ -30,5 +30,5 @@ const SECTIONS = [
 ] as const
 
 export default function AccessibilityPage() {
-  return <LegalPage title="Accessibility statement" sections={SECTIONS} />
+  return <LegalPage title="Accessibility Statement" sections={SECTIONS} />
 }

@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 const BENEFITS = [
   {
@@ -49,10 +47,76 @@ function slotFor(distance: number) {
 }
 
 /**
+ * The source's long-arrow glyph: a hairline with an open arrowhead
+ * (viewBox 0 0 52.01 27.9, 1px non-scaling stroke). The previous control
+ * is the same glyph rotated 180°.
+ */
+function LongArrow({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 52.01 27.9" className={className} aria-hidden="true" fill="none">
+      <path
+        d="M.75,13.95h49"
+        stroke="currentColor"
+        strokeLinecap="square"
+        strokeWidth={1}
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+      <path
+        d="M37.83,1.06l13.1,12.89-13.1,12.89"
+        stroke="currentColor"
+        strokeLinecap="square"
+        strokeWidth={1}
+        strokeMiterlimit={10}
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  )
+}
+
+function BenefitCard({
+  index,
+  title,
+  body,
+  className,
+  style,
+  ariaHidden,
+}: {
+  index: number
+  title: string
+  body: string
+  className?: string
+  style?: React.CSSProperties
+  ariaHidden?: boolean
+}) {
+  return (
+    <article
+      aria-hidden={ariaHidden}
+      className={className}
+      style={style}
+    >
+      <div>
+        <span className="font-body text-xs font-semibold tracking-[0.2em] text-primary">
+          {String(index + 1).padStart(2, '0')}
+        </span>
+        <h3 className="font-heading mt-4 text-2xl font-light text-primary md:text-3xl">
+          {title}
+        </h3>
+      </div>
+      <p className="font-body text-sm leading-relaxed text-primary md:text-base">{body}</p>
+    </article>
+  )
+}
+
+/**
  * WHY AURA — "Built different": white rounded-xl benefit cards in a
- * coverflow carousel over the cream→butter gradient, with round prev/next
- * controls on desktop. Keyboard: buttons are focusable; the carousel is
- * decorative-sequential, so no tab trapping is needed.
+ * coverflow carousel over the cream→butter gradient. Measured from the
+ * source: the desktop stage is a full-width h-96 window; below it (gap-12)
+ * sits a controls row — round long-arrow prev/next buttons at the gutters
+ * with a dot rail between (active dot 10px espresso fill, inactive 8px
+ * espresso-bordered). Mobile swaps the carousel for all six cards stacked
+ * (px-6 py-8, gap-6) with no controls. The source's dots are passive
+ * indicators (not clickable) — the buttons drive rotation.
  */
 export function BenefitsCarousel() {
   const [index, setIndex] = useState(0)
@@ -75,18 +139,9 @@ export function BenefitsCarousel() {
         </h2>
       </div>
 
-      {/* Desktop coverflow with side controls */}
-      <div className="hidden md:flex w-full items-center justify-between gap-6">
-        <button
-          type="button"
-          aria-label="Previous benefit"
-          onClick={() => go(-1)}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition hover:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          <ChevronLeft className="h-6 w-6" strokeWidth={1.5} aria-hidden="true" />
-        </button>
-
-        <div className="relative h-80 w-full">
+      <div className="relative flex w-full flex-col items-center gap-12">
+        {/* Desktop coverflow window */}
+        <div className="relative hidden h-96 w-full items-center justify-center overflow-hidden md:flex">
           {BENEFITS.map((b, i) => {
             const raw = Math.abs(i - index)
             const distance = Math.min(raw, total - raw)
@@ -94,9 +149,12 @@ export function BenefitsCarousel() {
             const slot = slotFor(distance)
             const translate = slot.translate * dir
             return (
-              <article
+              <BenefitCard
                 key={b.title}
-                aria-hidden={distance >= 3}
+                index={i}
+                title={b.title}
+                body={b.body}
+                ariaHidden={distance >= 3}
                 className="absolute left-1/2 ml-[-192px] flex h-80 w-96 flex-col justify-between rounded-xl bg-white px-8 py-10 transition-all duration-500 ease-out"
                 style={{
                   transform: `translateX(${translate}px) scale(${slot.scale})`,
@@ -105,81 +163,57 @@ export function BenefitsCarousel() {
                   boxShadow: 'rgba(230, 146, 76, 0.12) 0px 12px 20px 4px',
                   pointerEvents: distance === 0 ? 'auto' : 'none',
                 }}
-              >
-                <div>
-                  <span className="font-body text-xs font-semibold tracking-[0.2em] text-primary">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <h3 className="font-heading mt-4 text-2xl font-light text-primary md:text-3xl">
-                    {b.title}
-                  </h3>
-                </div>
-                <p className="font-body text-sm leading-relaxed text-primary md:text-base">
-                  {b.body}
-                </p>
-              </article>
+              />
             )
           })}
         </div>
 
-        <button
-          type="button"
-          aria-label="Next benefit"
-          onClick={() => go(1)}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition hover:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          <ChevronRight className="h-6 w-6" strokeWidth={1.5} aria-hidden="true" />
-        </button>
-      </div>
+        {/* Mobile: all six cards stacked, no controls */}
+        <div className="flex w-full flex-col gap-6 md:hidden">
+          {BENEFITS.map((b, i) => (
+            <BenefitCard
+              key={b.title}
+              index={i}
+              title={b.title}
+              body={b.body}
+              className="flex w-full flex-col justify-between rounded-xl bg-white px-6 py-8"
+              style={{ boxShadow: 'rgba(230, 146, 76, 0.12) 0px 12px 20px 4px' }}
+            />
+          ))}
+        </div>
 
-      {/* Mobile: current card only, swipe controls below */}
-      <div className="md:hidden">
-        <article
-          className="flex h-80 flex-col justify-between rounded-xl bg-white px-8 py-10"
-          style={{ boxShadow: 'rgba(230, 146, 76, 0.12) 0px 12px 20px 4px' }}
-        >
-          <div>
-            <span className="font-body text-xs font-semibold tracking-[0.2em] text-primary">
-              {String(index + 1).padStart(2, '0')}
-            </span>
-            <h3 className="font-heading mt-4 text-2xl font-light text-primary">
-              {BENEFITS[index].title}
-            </h3>
-          </div>
-          <p className="font-body text-sm leading-relaxed text-primary">{BENEFITS[index].body}</p>
-        </article>
-        <div className="mt-8 flex items-center justify-center gap-6">
+        {/* Desktop controls: prev arrow · dot rail · next arrow */}
+        <div className="hidden w-full items-center justify-between gap-6 md:flex">
           <button
             type="button"
             aria-label="Previous benefit"
             onClick={() => go(-1)}
-            className="flex h-10 w-10 items-center justify-center rounded-full transition hover:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:h-11 md:w-11"
           >
-            <ChevronLeft className="h-5 w-5" strokeWidth={1.5} aria-hidden="true" />
+            <LongArrow className="h-6 w-6 rotate-180 text-primary md:h-7 md:w-7" />
           </button>
-          <div className="flex gap-2" role="tablist" aria-label="Benefits">
-            {BENEFITS.map((b, i) => (
-              <button
-                key={b.title}
-                type="button"
-                role="tab"
-                aria-selected={i === index}
-                aria-label={`Benefit ${i + 1}: ${b.title}`}
-                onClick={() => setIndex(i)}
-                className={cn(
-                  'h-1.5 w-1.5 rounded-full transition-colors',
-                  i === index ? 'bg-primary' : 'bg-primary/25',
-                )}
-              />
-            ))}
+          <div className="flex items-center gap-3" aria-hidden="true">
+            {BENEFITS.map((b, i) =>
+              i === index ? (
+                <div
+                  key={b.title}
+                  className="h-2.5 w-2.5 rounded-full bg-[#411401] transition-colors"
+                />
+              ) : (
+                <div
+                  key={b.title}
+                  className="h-2 w-2 rounded-full border border-[#411401] bg-transparent transition-colors"
+                />
+              ),
+            )}
           </div>
           <button
             type="button"
             aria-label="Next benefit"
             onClick={() => go(1)}
-            className="flex h-10 w-10 items-center justify-center rounded-full transition hover:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:h-11 md:w-11"
           >
-            <ChevronRight className="h-5 w-5" strokeWidth={1.5} aria-hidden="true" />
+            <LongArrow className="h-6 w-6 text-primary md:h-7 md:w-7" />
           </button>
         </div>
       </div>
