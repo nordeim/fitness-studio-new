@@ -47,7 +47,7 @@ This PAD documents `fitness-studio-new` — a from-scratch Next.js 16 rebuild of
 | UI runtime | React | 19.x | Required by Next 16; `useTransition` drives non-blocking filter navigation |
 | Language | TypeScript (strict) | 5.x | Compile-time contract enforcement across the action boundary |
 | Styling | Tailwind CSS | 4.x | CSS-first `@theme` maps the extracted HSL tokens 1:1; no config file drift |
-| Component primitives | shadcn-style (Radix) | — | Toast/sonner and layout primitives without bespoke ARIA work |
+| Component primitives | sonner + lucide-react | — | Toasts and icons as direct dependencies — the shadcn `ui/` scaffold, `components.json`, and every Radix primitive were purged (sessions 8/10) |
 | ORM | Prisma | 6.x | Typed client; `db push` suits the SQLite dev loop; schema is Postgres-portable |
 | Database | SQLite | (system) | Zero-config single-file persistence; adequate for single-instance deployment |
 | Validation | Zod | 4.x | One schema per action input; `toFieldErrors` bridges to form errors |
@@ -568,7 +568,7 @@ No Dockerfile ships with the repo. Deployment target is any Node/Bun host: `bun 
 
 ### 8.4 CI/CD Pipeline
 
-CI runs on every push and PR to `main` (`.github/workflows/ci.yml`): `bun install --frozen-lockfile` → `prisma generate` → `bun run lint` → `bun run typecheck` → `bun run test:coverage` → `db:push` + seed (throwaway `db/ci.db`) → `bun run build`. This is the same gate the SSH-wrapper operator contract demands (`docs/how-to-git-push-using-ssh-wrapper_SKILL.md`): gates green → commit → dry-run push → real push with remote verification — now enforced by the host, not just the operator.
+CI runs on every push and PR to `main` (`.github/workflows/ci.yml`): `bun install --frozen-lockfile` → `prisma generate` → `bun run lint` → `bun run typecheck` → `bun run test:coverage` → `db:push` + seed (throwaway `db/ci.db`) → `bun run build`. This is the same gate the SSH-wrapper operator contract demands (`docs/how-to-git-push-using-ssh-wrapper_SKILL.md`): gates green → commit → dry-run push → real push with remote verification — now enforced by the host, not just the operator. **Session-10 postmortem:** CI ran red on `main` for two commits after the session-8 push — the purge left `tailwind.config.ts` importing the removed `tailwindcss-animate`, which passed the session-8 sandbox (stale `node_modules`) but failed every fresh install. The lesson is institutionalized: CI failure on any push is a release blocker, and local gates must always be run from a state equivalent to a fresh clone after dependency changes.
 
 ---
 
@@ -599,7 +599,7 @@ bun run dev                 # http://localhost:3000
 
 - TypeScript strict; `import type` for type-only imports; `interface` for shapes, `type` for unions.
 - `'use server'` files export async functions ONLY (a sync export breaks every importing route at runtime — verified failure mode).
-- Tailwind v4 CSS-first: tokens and custom utilities live in `globals.css`; no `tailwind.config.js` theme edits.
+- Tailwind v4 CSS-first: tokens and custom utilities live in `globals.css`; no `tailwind.config.*` file exists (the scaffold config was deleted in session 10 — it imported the purged `tailwindcss-animate` and broke fresh-clone typecheck/build/CI).
 - Client components: derive state from props/server data; never duplicate source-of-truth state locally.
 - Conventional Commits; `main` only; atomic scopes.
 
@@ -634,6 +634,8 @@ bun run dev                 # http://localhost:3000
 | — | **Fixed in session 6:** the legal pages used an espresso hero band + kicker, but the source renders cream prose pages; titles were lower-case; the 404 quoted the path with its leading slash and sat high in a squeezed field | Visual mismatch on 4 routes + 404 | Resolved — cream `max-w-3xl` prose layout (Title-Case h1, `forceSolid` header), slash-stripped 404 copy (TDD), full-viewport centered 404 field |
 | — | **Fixed in session 6:** the closed header menu was `aria-hidden` but its links stayed tab-focusable (Tab landed on invisible links) — an aria-hidden-focus WCAG violation | Keyboard users tabbed into invisible controls | Resolved — the closed panel is `inert`; focus skips it entirely (browser-verified) |
 | — | **Fixed in session 6:** benefits controls flanked the carousel and desktop had no dot rail; the footer copyright row lacked the source's hairline/spacing and stacked-links treatment | Visual mismatch on home (two sections) and every footer | Resolved — below-stage long-arrow controls + passive dots (desktop), stacked mobile cards; measured copyright row |
+| — | **Fixed in session 10:** `tailwind.config.ts` (scaffold remnant from the initial commit) imported `tailwindcss-animate`, removed from deps in session 8 — typecheck and build failed on every fresh clone, and CI ran red on `main` for two commits (`43dbfec`, `ae1cae0`) | Fresh-clone `bun run typecheck`/`bun run build` broken; hosted CI failing | Resolved — the file is deleted (nothing referenced it; Tailwind v4 is CSS-first; the dark variant lives in `globals.css`). The session-8 sandbox had the package lingering in `node_modules`, which is why its local gates passed while CI failed — gates after dependency changes must run from a fresh-install state |
+| — | **Fixed in session 10:** `components.json` (the shadcn CLI manifest) still aliased `@/components/ui` and `@/hooks`, both deleted in session 8 | Stale scaffold config referencing removed directories | Resolved — deleted; `bunx shadcn init` regenerates it if primitives are ever wanted again |
 
 ---
 

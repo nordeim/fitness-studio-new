@@ -38,7 +38,7 @@ The original is a Base44 template app: a women-only fitness studio marketing sit
 | UI runtime | React | 19 | Component model |
 | Language | TypeScript (strict) | 5.x | Type safety end to end |
 | Styling | Tailwind CSS (CSS-first) | 4.x | Token-driven design system in `globals.css` |
-| Components | shadcn-style on Radix | — | Primitives (toast via sonner) |
+| Components | sonner + lucide-react | — | Toasts and icons as direct dependencies (scaffold purged) |
 | ORM | Prisma | 6.x | Schema, client, `db push` |
 | Database | SQLite | — | Zero-config local persistence (`db/custom.db`) |
 | Validation | Zod | 4.x | Every action input |

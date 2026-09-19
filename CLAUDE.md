@@ -39,7 +39,7 @@ Production clone of `fitness-studio.base44.app` ("AURA Studio"), a women-only bo
 
 ### Tailwind v4 (CSS-first)
 
-- No `tailwind.config.js` theme edits — tokens live in `src/app/globals.css` `:root` (HSL, extracted from the source app) and map through `@theme inline`.
+- No `tailwind.config.*` exists (deleted in session 10 — the scaffold remnant imported the purged `tailwindcss-animate` and broke fresh-clone typecheck/build/CI) — tokens live in `src/app/globals.css` `:root` (HSL, extracted from the source app) and map through `@theme inline`.
 - Custom utilities (`.font-heading`, `.kicker`, `.container-aura`, `.coach-panel`, `.animate-breathe`, `.animate-gradientShift`, `.scroll-elegant`) are defined in `@layer utilities` in `globals.css`.
 - **Measured design system**: buttons `rounded` + `px-6 py-2.5 text-xs tracking-[0.1em]→[0.2em]` hover with arrow-up-right (`AuraButton`); headings Taviraj `font-light` non-italic (hero `font-extralight`); kickers `text-xs tracking-[0.3em]`; section gutters `max-w-[1400px] px-6 md:px-[8vw]` (`.container-aura`). Legal pages are the layout exception: the source's cream prose page (`max-w-3xl` column, h1 `text-4xl md:text-5xl font-light`, `space-y-10` h2 sections) with `forceSolid` header — no espresso band. The benefits coverflow keeps its controls row below the stage (long-arrow buttons + passive dot rail, desktop only; mobile stacks all cards). Coaches render in rows of two, each row an independent accordion. The footer copyright row sits `mt-16` under a `border-[#F0EFE9]/90` hairline with stacked-on-mobile legal links.
 - `prefers-reduced-motion` disables the breathe/gradientShift/char-rise animations.
