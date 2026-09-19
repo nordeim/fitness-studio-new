@@ -42,14 +42,15 @@ This PAD documents `fitness-studio-new` — a from-scratch Next.js 16 rebuild of
 
 | Layer | Technology | Version | Key Rationale |
 |---|---|---|---|
-| Package manager | Bun | ≥ 1.1 | Single runtime for install/dev/test; fastest cold start in the sandbox |
-| Web framework | Next.js (App Router) | 16.1.x | RSC-first matches the "server is the source of truth" principle; Server Actions remove the need for a REST layer |
+| Package manager | Bun (primary; `package-lock.json` also committed for the operator's npm server workflow) | ≥ 1.1 | Single runtime for install/dev/test; fastest cold start in the sandbox |
+| Web framework | Next.js (App Router) | 16.3.x | RSC-first matches the "server is the source of truth" principle; Server Actions remove the need for a REST layer; `output: "standalone"` for self-contained deploys |
 | UI runtime | React | 19.x | Required by Next 16; `useTransition` drives non-blocking filter navigation |
 | Language | TypeScript (strict) | 5.x | Compile-time contract enforcement across the action boundary |
 | Styling | Tailwind CSS | 4.x | CSS-first `@theme` maps the extracted HSL tokens 1:1; no config file drift |
 | Component primitives | sonner + lucide-react | — | Toasts and icons as direct dependencies — the shadcn `ui/` scaffold, `components.json`, and every Radix primitive were purged (sessions 8/10) |
-| ORM | Prisma | 6.x | Typed client; `db push` suits the SQLite dev loop; schema is Postgres-portable |
-| Database | SQLite | (system) | Zero-config single-file persistence; adequate for single-instance deployment |
+| ORM | Prisma | 6.19.x | Typed client; `db push` (CI) and `migrate dev` (operator) both supported; schema is Postgres-portable |
+| Database | SQLite | (system) | Zero-config single-file persistence; adequate for single-instance deployment; relative `file:` URLs resolved app-side (`lib/domain/database-url.ts`) so dev, build, CI, and the standalone server agree on the file's location |
+| Image optimization | sharp | 0.35.x | Runtime optimizer for `next/image` in the standalone server (libvips CVE-patched line) |
 | Validation | Zod | 4.x | One schema per action input; `toFieldErrors` bridges to form errors |
 | Auth | hand-rolled scrypt + HMAC sessions | — | No third-party dependency; no account-existence oracle; DB stores token fingerprints only |
 | Unit tests | Vitest + @vitest/coverage-v8 | latest | Fast, ESM-native; tests the pure domain seam under a 100% coverage gate |
@@ -399,7 +400,8 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 
 ### 4.3 Persistence Strategy
 
-- **Dev flow:** `bun run db:push` (schema-first; no migration files) then `bun run scripts/seed.ts`. The seed is idempotent — instructors/memberships upsert by stable id, classes by natural key (title + day + startTime) — safe to re-run after schema pushes.
+- **Dev flow:** `bun run db:push` (schema-first; the CI flow) or `bun run db:migrate` (migration-based; `prisma/migrations/` holds the init migration — the operator's server flow), then `bun run scripts/seed.ts`. The seed is idempotent — instructors/memberships upsert by stable id, classes by natural key (title + day + startTime) — safe to re-run after schema pushes.
+- **Datasource URL resolution (session 12):** the Prisma CLI resolves relative `file:` URLs against `prisma/schema.prisma`, but the generated client resolves them against its engine cwd — which falls back to the traced `.prisma/client` directory under `output: "standalone"`, so every DB-backed route 500'd on the deployed server ("Unable to open the database file", SQLite error 14). `src/lib/db.ts` therefore passes an explicit `datasourceUrl`: the pure `resolveDatabaseUrl` (`lib/domain/database-url.ts`, 100%-covered) anchors the URL at the real schema directory, which `findSchemaDir` locates by walking up from the cwd while **skipping `prisma/schema.prisma` copies inside `.next`** (the build tracer copies the schema into `.next/standalone/prisma/` — a traced copy is never the source of truth). Net effect: `file:../db/custom.db` resolves to `<repo>/db/custom.db` in dev, build, CI, and the run-in-place standalone server; a relocated standalone tree (Docker `WORKDIR /app`) anchors at its traced `/app/prisma`; absolute `DATABASE_URL` values pass through untouched (the container escape hatch).
 - **Connection management:** one PrismaClient singleton (`src/lib/db.ts`) stored on `globalThis` in dev to survive HMR.
 - **Enums as strings + CHECK-by-validation:** SQLite lacks enums; allowed values are enforced in the domain (`CLASS_TYPES`, `INTENSITIES`, `DAYS_OF_WEEK` const arrays) and validated at every read via `normalizeFilters`.
 - **JSON array columns:** `specialties`/`certifications`/`features` are JSON strings; the ONLY (de)serialization path is `parseJsonArray`/`serializeJsonArray` (defensive: malformed JSON returns `[]`, non-strings are dropped).
@@ -518,9 +520,9 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 
 | Category | Files | Tests | Location | Framework |
 |---|---|---|---|---|
-| Domain unit | 2 | 48 | `tests/domain.test.ts` (36), `tests/reset.test.ts` (12) | Vitest |
+| Domain unit | 3 | 59 | `tests/domain.test.ts` (36), `tests/reset.test.ts` (12), `tests/database-url.test.ts` (11) | Vitest |
 | Coverage gate | — | — | `vitest.config.ts` (100% stmts/branches/functions/lines on `src/lib/domain/**`) | @vitest/coverage-v8 |
-| E2E golden path (manual/browser) | — | — | browser session | agent-browser |
+| E2E golden path (manual/browser) | — | — | browser session (dev server **and** the standalone build after deployment-path changes) | agent-browser |
 
 ### 7.2 Test Patterns
 
@@ -529,6 +531,7 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 - **Failure-path coverage:** duplicate-vs-capacity precedence, unknown enum values, malformed JSON columns, non-string array members.
 - **Re-booking regression (session 4):** a cancelled row occupies `@@unique([userId, classId])` forever, so `planBookingWrite` must plan a **reactivate** (row update), not a create — the test pins the plan (`reactivate`, bookingId, spotsLeft) and the deny-when-since-filled case.
 - **Reset-token policy (session 8, TDD):** `validateResetTokenState` boundaries — expiry at exactly-now is expired, a used marker dominates expiry, missing rows are `not_found` — plus the delivery decision (`chooseResetChannel`) and email builder (`buildResetEmail`: URL in both bodies, token never in the subject).
+- **Datasource-URL resolution (session 12, TDD):** `resolveDatabaseUrl` — schema-relative anchoring of `file:../db/custom.db`, bare/`./` relative paths, multi-hop `..` collapse with POSIX root-clamping, absolute and non-SQLite passthrough, blank→fallback, and the bare `file:` staying loud. The anchor-finding itself (`findSchemaDir`, fs I/O) is verified by the standalone E2E run, per the repo's I/O-verification convention.
 - **Golden path (browser-verified):** sign-up → filter schedule (`?type=YOGA` shows exactly the 8 yoga classes) → book (spots 7→6, "BOOKED ✓", sonner toast) → verify on `/account` → cancel (booking removed, spot released, toast) → **re-book the same class** (cancelled row re-activated, spots 9→10). This exact sequence was executed and observed during the session-4 build.
 
 ### 7.3 Coverage Thresholds
@@ -539,10 +542,11 @@ The pure domain seam (`src/lib/domain/`) is at 100% statements/branches/function
 
 - [ ] `bun run lint` exits clean (no-console / prefer-const / no-unused-vars enforced)
 - [ ] `bun run typecheck` exits clean (`tsc --noEmit`; the build no longer ignores type errors)
-- [ ] `bun run test:coverage` — 48/48 pass, 100% gate green on `src/lib/domain/**`
+- [ ] `bun run test:coverage` — 59/59 pass, 100% gate green on `src/lib/domain/**`
 - [ ] `bun run dev` boots; golden path (sign-up → book → cancel → re-book) exercised in the browser
-- [ ] No `.env`, `db/*.db`, or key material staged (`git status` hygiene)
-- [ ] New domain logic arrived with tests in `tests/domain.test.ts`
+- [ ] Deployment-path changes only: the same golden path re-run against `bun run start` (the standalone build)
+- [ ] No `db/*.db` or key material staged (`git status` hygiene; the tracked `.env` is the documented operator exception — keep third-party secrets out of it)
+- [ ] New domain logic arrived with tests in `tests/`
 
 ---
 
@@ -551,20 +555,26 @@ The pure domain seam (`src/lib/domain/`) is at 100% statements/branches/function
 ### 8.1 Production Build
 
 ```bash
-bun run build      # next build (Turbopack) → .next/
-bun run start      # serve the production build
+bun run build      # next build (Turbopack, output: "standalone") → .next/standalone/ (static + public copied in)
+bun run start      # NODE_ENV=production bun .next/standalone/server.js (teed to server.log)
 ```
+
+The standalone server's render workers run with `cwd = .next/standalone`, and the build tracer copies `prisma/schema.prisma` into the tree — both are handled by the app-side datasource resolution (§4.3), so the database stays at `<repo>/db/custom.db`, persistent across rebuilds. Server checklist: `db:migrate` (or `db:push`) → `scripts/seed.ts` → `build` → `start`. Repeated builds into the same tree can leave mixed-generation chunks in `.next/standalone` (the `cp -r` step merges); delete `.next/` before builds that must be pristine.
 
 ### 8.2 Environment Variables
 
 | Name | Required | Description | Default |
 |---|---|---|---|
-| `DATABASE_URL` | yes | SQLite path relative to `prisma/` | `file:../db/custom.db` |
+| `DATABASE_URL` | yes | SQLite path relative to `prisma/` (resolved app-side — see §4.3; absolute values pass through untouched) | `file:../db/custom.db` |
 | `SESSION_SECRET` | production | HMAC secret for session fingerprints (`openssl rand -base64 32`); rotation invalidates all sessions | dev fallback constant (log warns; never use in prod) |
+| `SITE_URL` | production | Canonical origin (sitemap, OpenGraph, reset-link fallback) | `http://localhost:3000` |
+| `RESEND_API_KEY` / `AURA_EMAIL_FROM` | no | Switches password-reset delivery from the operator log to real email | unset → operator log |
+
+**Deviation note:** the operator deliberately tracks a real `.env` in git (force-added past `.gitignore`) so the deploy server is self-contained — it carries the deployed `SITE_URL` and a live `SESSION_SECRET`. Acceptable only for this single-operator deployment; third-party secrets (Resend, OAuth) must never be added to it, and the secret should be rotated if the repo's audience ever widens (rotation invalidates sessions by design).
 
 ### 8.3 Docker Configuration
 
-No Dockerfile ships with the repo. Deployment target is any Node/Bun host: `bun install && bun run build && bun run start` with the two env vars set. For Postgres, flip `provider` in `prisma/schema.prisma` and set `DATABASE_URL` — the schema and transaction patterns port unchanged.
+No Dockerfile ships with the repo. Deployment target is any Node/Bun host: `bun install && bun run build && bun run start` with the env vars set. If the standalone tree is relocated (Docker `WORKDIR /app`), the traced `/app/prisma/schema.prisma` anchors the database at `/app/db/custom.db` (mount it as a volume), or set `DATABASE_URL` to an absolute `file:` URL to pin it. For Postgres, flip `provider` in `prisma/schema.prisma` and set `DATABASE_URL` — the schema and transaction patterns port unchanged.
 
 ### 8.4 CI/CD Pipeline
 
@@ -636,6 +646,10 @@ bun run dev                 # http://localhost:3000
 | — | **Fixed in session 6:** benefits controls flanked the carousel and desktop had no dot rail; the footer copyright row lacked the source's hairline/spacing and stacked-links treatment | Visual mismatch on home (two sections) and every footer | Resolved — below-stage long-arrow controls + passive dots (desktop), stacked mobile cards; measured copyright row |
 | — | **Fixed in session 10:** `tailwind.config.ts` (scaffold remnant from the initial commit) imported `tailwindcss-animate`, removed from deps in session 8 — typecheck and build failed on every fresh clone, and CI ran red on `main` for two commits (`43dbfec`, `ae1cae0`) | Fresh-clone `bun run typecheck`/`bun run build` broken; hosted CI failing | Resolved — the file is deleted (nothing referenced it; Tailwind v4 is CSS-first; the dark variant lives in `globals.css`). The session-8 sandbox had the package lingering in `node_modules`, which is why its local gates passed while CI failed — gates after dependency changes must run from a fresh-install state |
 | — | **Fixed in session 10:** `components.json` (the shadcn CLI manifest) still aliased `@/components/ui` and `@/hooks`, both deleted in session 8 | Stale scaffold config referencing removed directories | Resolved — deleted; `bunx shadcn init` regenerates it if primitives are ever wanted again |
+| — | **Fixed in session 12:** the standalone deployment (`output: "standalone"`, added with the operator's session-11 package/version commit) 500'd on every DB-backed route in production (`/classes`, auth POSTs, `/account`) — the traced Prisma client resolves relative `file:` URLs against a different base than the CLI, and the standalone workers' cwd plus the traced `prisma/schema.prisma` copy compounded the divergence | The deployed site (fitness-studio.jesspete.shop) could not render the schedule or authenticate | Resolved — app-side datasource-URL resolution (`lib/domain/database-url.ts` pure + 100%-covered; `db.ts` `findSchemaDir` anchors at the real schema dir, skipping `.next` copies). Reproduced, fixed, and golden-path-verified against the standalone build end-to-end (§4.3) |
+| — | **Fixed in session 12:** sharp 0.34.x carried high-severity libvips/libheif advisories (npm audit: 4 high) on the runtime image-optimization path | CVE exposure in production image processing | Resolved — bumped to sharp 0.35.4 (audit's own recommendation); standalone `/_next/image` verified 200. Remaining 3 high advisories are the `deepmerge-ts` chain inside the Prisma CLI (`@prisma/config`) — dev-time tooling only, no runtime import, and every available "fix" is a regression (Prisma 6.12 downgrade or 8.0.0-RC); accepted and documented |
+| LOW | The operator's committed `.env` carries a live `SESSION_SECRET` in a public repo | Secret disclosure lowers the DB-leak → session-forgery barrier (the fingerprint design specifically defends that boundary) | Accepted (operator choice — single-operator pull-and-deploy workflow; documented in §8.2 and AGENTS.md). Rotate the secret if the repo's audience ever widens; never add third-party secrets to it |
+| LOW | `package-lock.json` and `bun.lock` coexist (bun primary, npm for the operator's server installs) | Dual lockfiles can drift | Accepted — CI installs via `bun install --frozen-lockfile` only; dependency changes must regenerate both (`bun add …` then `npm install --package-lock-only`), documented in AGENTS.md |
 
 ---
 
@@ -652,6 +666,8 @@ bun run dev                 # http://localhost:3000
 | `src/lib/domain/not-found.ts` | ~10 | `formatNotFoundCopy` — the quoted-path 404 sentence |
 | `src/lib/domain/reset-policy.ts` | ~25 | `validateResetTokenState` — the reset-token state machine (valid/expired/used/not_found) |
 | `src/lib/domain/reset-delivery.ts` | ~45 | `chooseResetChannel` + `buildResetEmail` — delivery decision and message construction |
+| `src/lib/domain/database-url.ts` | ~70 | `resolveDatabaseUrl` — schema-relative resolution of SQLite `file:` URLs (standalone-deploy fix, session 12) |
+| `src/lib/db.ts` | ~75 | PrismaClient singleton + `findSchemaDir` anchor (walks up from the cwd, skips `.next` traced copies) feeding the explicit `datasourceUrl` |
 | `src/lib/auth/passwords.ts` | ~45 | scrypt hash/verify with parameter-carrying format |
 | `src/lib/auth/session.ts` | ~75 | Opaque-token session lifecycle with HMAC fingerprints |
 | `src/actions/auth.ts` | ~205 | signUp / signIn / signOut / requestPasswordReset / resetPassword + the Resend email channel |
@@ -667,7 +683,7 @@ bun run dev                 # http://localhost:3000
 | `src/components/site/auth-card.tsx` | ~330 | Four-mode auth shell (signin/signup/reset/newpass) with field errors |
 | `src/app/globals.css` | ~180 | Token block, utilities, keyframes, reduced-motion rules |
 | `scripts/seed.ts` | ~200 | Idempotent seed (natural-key upserts) |
-| `tests/domain.test.ts` + `tests/reset.test.ts` | ~380 | 48 worked-example tests over the pure seam (dial rotation, spotlight, write plans, 404 copy, reset policy + delivery) |
+| `tests/domain.test.ts` + `tests/reset.test.ts` + `tests/database-url.test.ts` | ~440 | 59 worked-example tests over the pure seam (dial rotation, spotlight, write plans, 404 copy, reset policy + delivery, SQLite URL resolution) |
 
 ---
 

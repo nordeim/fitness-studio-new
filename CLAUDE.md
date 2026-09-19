@@ -9,7 +9,7 @@ last_updated: 2026-09-19
 
 Production clone of `fitness-studio.base44.app` ("AURA Studio"), a women-only boutique fitness studio: marketing site, class schedule with booking, memberships & pricing, instructor profiles, and member accounts. Single Next.js 16 App Router application with Prisma + SQLite and hand-rolled session auth. The clone preserves the source app's design tokens (espresso/cream/butter palette, Taviraj + Inter) and its four domain entities (StudioClass, Instructor, Membership, Booking).
 
-**Stack**: Bun · Next.js 16.1 (App Router, Turbopack) · React 19 (strict mode) · TypeScript 5 (strict — `bun run typecheck` must be clean; the build does not ignore errors) · Tailwind CSS v4 (CSS-first) · Prisma 6 + SQLite · Zod 4 · Vitest (coverage-gated) · sonner (toasts).
+**Stack**: Bun · Next.js 16.3 (App Router, Turbopack, `output: "standalone"`) · React 19 (strict mode) · TypeScript 5 (strict — `bun run typecheck` must be clean; the build does not ignore errors) · Tailwind CSS v4 (CSS-first) · Prisma 6 + SQLite · Zod 4 · Vitest (coverage-gated) · sonner (toasts) · sharp (runtime image optimization for the standalone server).
 
 ## Foundational Principles
 
@@ -47,7 +47,8 @@ Production clone of `fitness-studio.base44.app` ("AURA Studio"), a women-only bo
 
 ### Data layer (Prisma + SQLite)
 
-- Schema at `prisma/schema.prisma`; push with `bun run db:push` (no migrations folder — SQLite dev flow).
+- Schema at `prisma/schema.prisma`. Two supported flows: `bun run db:push` (schema push — the CI flow) and `bun run db:migrate` / `db:reset` (migration-based — `prisma/migrations/` exists with the init migration; the operator's server flow).
+- **Relative `file:` URLs are resolved app-side** (`src/lib/db.ts` passes an explicit `datasourceUrl`): the pure `resolveDatabaseUrl` (`lib/domain/database-url.ts`) anchors the URL at the real `prisma/schema.prisma` directory — found by walking up from the cwd while **skipping traced copies inside `.next`** — because the Prisma CLI and the generated client disagree about relative SQLite paths, and the standalone server's workers run with `cwd = .next/standalone`. Absolute `DATABASE_URL` values pass through untouched.
 - SQLite has no arrays or enums as strings columns: `specialties`/`certifications`/`features` are JSON strings; (de)serialize ONLY via `parseJsonArray`/`serializeJsonArray`.
 - Booking writes run inside `db.$transaction`: guard (capacity + duplicate) and `spotsTaken` increment/decrement commit atomically. `@@unique([userId, classId])` backs the duplicate guard — and because a cancelled row keeps occupying that key forever, `planBookingWrite` (`lib/domain/booking-rules.ts`) plans a **reactivate** (row update) instead of a create when the member re-books a previously cancelled class.
 - Seed (`scripts/seed.ts`) is idempotent — instructor/membership upserts by stable id, classes by natural key (title + day + startTime). Safe to re-run.
@@ -79,14 +80,15 @@ CI (`.github/workflows/ci.yml`) runs the full gate — lint → typecheck → co
 
 | Command | Purpose |
 |---|---|
-| `bun run dev` | Dev server :3000 |
+| `bun run dev` | Dev server :3000 (teed to `dev.log`) |
 | `bun run lint` | ESLint 9 flat config — must be clean (no-console/prefer-const/no-unused-vars enforced) |
 | `bun run typecheck` | `tsc --noEmit` — must be clean |
-| `bun run test` | Vitest domain suite (48 tests) |
+| `bun run test` | Vitest domain suite (59 tests) |
 | `bun run test:coverage` | Suite + 100% coverage gate on `src/lib/domain/**` |
-| `bun run db:push` / `bun run db:generate` | Schema lifecycle |
+| `bun run db:push` / `bun run db:generate` / `bun run db:migrate` / `bun run db:reset` | Schema lifecycle (push = CI flow; migrate/reset = migration flow) |
 | `bun run scripts/seed.ts` | Idempotent seed |
-| `bun run build` | Production build |
+| `bun run build` | Production build (standalone output; static/public copied into `.next/standalone/`) |
+| `bun run start` | Standalone production server (teed to `server.log`) |
 
 Clean check order: `bun run lint && bun run typecheck && bun run test`.
 
@@ -94,7 +96,7 @@ Clean check order: `bun run lint && bun run typecheck && bun run test`.
 
 | Level | Tool | Location | Notes |
 |---|---|---|---|
-| Unit | Vitest | `tests/domain.test.ts`, `tests/reset.test.ts` | Filters, schedule sorting, time formatting, booking write plans (create/deny/re-activate), cancellation window, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy, reset-token policy (valid/expired/used/not_found boundaries), reset delivery channel + email builder. 100% coverage enforced on `src/lib/domain/**` |
+| Unit | Vitest | `tests/domain.test.ts`, `tests/reset.test.ts`, `tests/database-url.test.ts` | Filters, schedule sorting, time formatting, booking write plans (create/deny/re-activate), cancellation window, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy, reset-token policy (valid/expired/used/not_found boundaries), reset delivery channel + email builder, SQLite datasource-URL resolution (schema-relative anchoring, passthrough, root-clamping). 100% coverage enforced on `src/lib/domain/**` |
 | E2E (manual) | Browser | — | Golden path: sign-up → filter schedule → book → verify "Booked ✓" + toast → cancel from /account → re-book (re-activation). Reset loop: request → open link → new password → sign in → old password rejected → token reuse rejected |
 
 - Expected values in tests are worked examples (e.g. `formatTimeClock('18:45') === '6:45 PM'`), never recomputed by the same code under test.
@@ -110,7 +112,7 @@ Clean check order: `bun run lint && bun run typecheck && bun run test`.
 ## Git & Version Control
 
 - Branch `main` only (the SSH-wrapper operator contract); Conventional Commits (`feat:`, `fix:`, `docs:`).
-- Never commit `.env`, `db/*.db`, or keys — `.gitignore` rejects all three.
+- Never commit `db/*.db` or keys. `.env` is the documented exception: the operator deliberately tracks it (force-added past `.gitignore`) so the deploy server is self-contained — keep it free of third-party secrets (`RESEND_API_KEY`, OAuth), and see AGENTS.md "Environment" for the rotation note.
 - Pushes to `nordeim/fitness-studio-new` use `docs/ssh_git_wrapper_v3.py` (see `docs/how-to-git-push-using-ssh-wrapper_SKILL.md`): gates green → commit → dry-run → push → remote verified.
 
 ## Error Handling & Debugging

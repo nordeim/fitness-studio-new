@@ -4,19 +4,22 @@ Instructions for AI coding agents working in this repository. Every line answers
 
 ## Commands
 
-Run from the repo root. Bun is the package manager — use `bun`, never `npm`/`yarn`/`pnpm`.
+Run from the repo root. Bun is the primary package manager; a `package-lock.json` is also committed (the operator's npm-based server workflow) — never edit either lockfile by hand, and keep both in sync when dependencies change (`bun add …` then `npm install --package-lock-only`).
 
 | Command | What it does |
 |---|---|
 | `bun install` | Install dependencies |
-| `bun run dev` | Dev server on :3000 (Turbopack) |
+| `bun run dev` | Dev server on :3000 (Turbopack; output teed to `dev.log`) |
 | `bun run lint` | ESLint 9 (flat config) — must exit clean (no-console / prefer-const / no-unused-vars enforced) |
 | `bun run typecheck` | `tsc --noEmit` — must exit clean (the build no longer ignores type errors) |
-| `bun run test` | Vitest domain suite (48 tests) |
+| `bun run test` | Vitest domain suite (59 tests) |
 | `bun run test:coverage` | Same suite with the 100% gate on `src/lib/domain/**` (statements/branches/functions/lines) |
-| `bun run db:push` | Push `prisma/schema.prisma` to SQLite (creates `db/custom.db`) |
+| `bun run db:push` | Push `prisma/schema.prisma` to SQLite (creates `db/custom.db`) — the CI flow |
+| `bun run db:migrate` | `prisma migrate dev` — development migrations (`prisma/migrations/`, owner's server flow) |
+| `bun run db:reset` | `prisma migrate reset` — drop + replay migrations (destructive) |
 | `bun run scripts/seed.ts` | Idempotent seed: 4 instructors, 3 memberships, 27 classes |
-| `bun run build` | Production build |
+| `bun run build` | Production build (`output: "standalone"` + copies static/public into `.next/standalone/`) |
+| `bun run start` | Standalone production server (`bun .next/standalone/server.js`; logs to `server.log`) |
 
 A clean check is: `bun run lint && bun run typecheck && bun run test`. CI (`.github/workflows/ci.yml`) runs lint + typecheck + coverage-gated tests + db push/seed + build on every push/PR to main. Fresh-clone bootstrap: `cp .env.example .env && bun install && bun run db:push && bun run scripts/seed.ts && bun run dev`.
 
@@ -24,16 +27,18 @@ A clean check is: `bun run lint && bun run typecheck && bun run test`. CI (`.git
 
 - **Single Next.js 16 App Router app** (no monorepo). Server Components by default; `"use client"` only on interactive leaves (`src/components/site/*`).
 - **Mutations go through Server Actions in `src/actions/`** that return `ActionResult<T>` from `@/lib/result` — never throw across the client boundary, never REST endpoints for UI mutations.
-- **Domain logic is pure and lives in `src/lib/domain/`** (`class-filters.ts`, `booking-rules.ts`, `discipline-wheel.ts`, `testimonial-spotlight.ts`, `not-found.ts`, `reset-policy.ts`, `reset-delivery.ts`) — no I/O, no Prisma imports; this is the unit-tested seam, held to 100% coverage by `bun run test:coverage`.
+- **Domain logic is pure and lives in `src/lib/domain/`** (`class-filters.ts`, `booking-rules.ts`, `discipline-wheel.ts`, `testimonial-spotlight.ts`, `not-found.ts`, `reset-policy.ts`, `reset-delivery.ts`, `database-url.ts`) — no I/O, no Prisma imports; this is the unit-tested seam, held to 100% coverage by `bun run test:coverage`.
 - **Money is integer minor units (cents)** everywhere. `formatMoney(2800) === "$28"`. Floats never touch money paths.
 - **Booking capacity + duplicate checks run inside `db.$transaction`** in `src/actions/bookings.ts` — the read of `spotsTaken`, the guard, and the increment are one transaction; `@@unique([userId, classId])` is the last-line defense. **Re-booking after cancellation re-activates the cancelled row** (`planBookingWrite` in `lib/domain/booking-rules.ts` returns `reactivate`) — a fresh `create` would collide with the unique key the cancelled row occupies forever.
 - **Dependency direction**: `app/ → components/ → lib/domain/ → lib/db`. `lib/domain` must not import the db client (it stays pure/testable).
+- **The datasource URL is resolved app-side** (`src/lib/db.ts` → pure `resolveDatabaseUrl` in `lib/domain/database-url.ts`): the Prisma CLI resolves relative `file:` URLs against `prisma/schema.prisma`, but the generated client resolves them against its engine cwd — which falls back to the traced `.prisma/client` dir in standalone builds, 500-ing every DB route ("Unable to open the database file"). The anchor (`findSchemaDir`) walks up from the cwd, **skipping `prisma/schema.prisma` copies inside `.next`** (traced copies are never the source of truth), so `file:../db/custom.db` lands at `<repo>/db/custom.db` in dev, build, CI, and the run-in-place standalone server alike. Absolute `DATABASE_URL`s pass through untouched (the CI/container escape hatch).
 
 ## Framework quirks (verified the hard way)
 
 - **Next.js 16**: `searchParams` and `cookies()` are async — always `await` them (see `src/app/classes/page.tsx`). Page files may export only `default` + `metadata`/`generateMetadata`/`dynamic` — extra exports fail the build.
 - **`'use server'` files may export ONLY async functions.** Re-exporting a sync helper (e.g. `export { spotsLeft }`) from an actions file breaks every route that imports it with "Server Actions must be async functions" at runtime, not compile time. Keep helpers in `lib/` and import them from there.
-- **Turbopack cache corruption** (panic: "Failed to restore task data") — delete `.next/` and restart the dev server; the error survives reloads otherwise.
+- **Turbopack cache corruption** (panic: "Failed to restore task data") — delete `.next/` and restart the dev server; the error survives reloads otherwise. Repeated `bun run build` runs into the same tree can also leave mixed-generation chunks in `.next/standalone` (the build's `cp -r` step merges rather than replaces) — delete `.next/` before builds that must be pristine.
+- **The standalone server's render workers run with `cwd = .next/standalone`** — never anchor filesystem paths on `process.cwd()` in server code without the `findSchemaDir`-style walk-up (see `src/lib/db.ts`), and remember the build tracer copies `prisma/schema.prisma` into `.next/standalone/prisma/`, so "the schema is here" is not proof you are at the repo root.
 - **Tailwind v4 CSS-first**: design tokens live in `src/app/globals.css` `:root` as HSL values extracted from the source site (`--primary: hsl(21 93% 13%)` = espresso `#411401`). There is no `tailwind.config.*` file at all (the scaffold's config was deleted in session 10 — it referenced the purged `tailwindcss-animate` and broke typecheck/build/CI on fresh clones); `font-heading`/`kicker`/`container-aura`/`coach-panel`/`.animate-breathe`/`.animate-gradientShift` utilities are defined in `globals.css` `@layer utilities`, and the dark variant is `@custom-variant dark` in `globals.css`.
 - **Source-measured design system** (session 2 parity pass): buttons are `rounded` (6px), `px-6 py-2.5 text-xs tracking-[0.1em]` easing to `0.2em` on hover with an arrow-up-right glyph (`AuraButton`). Page/section headings are Taviraj `font-light` (hero display: `font-extralight`) — **not italic** (only testimonial quotes and Inhale/Exhale are italic). Sections use `max-w-[1400px] mx-auto` with `px-6 md:px-[8vw]` gutters (the `.container-aura` utility).
 - **Header is fixed with hide-on-scroll** (`src/components/site/header.tsx`): transparent/white over each page's espresso hero band; past 64px of scroll it swaps to cream+espresso and slides out (`translateY(-100%)`). The menu is a cream dropdown panel (Taviraj 28px links + Book-a-class button + studio hours). While the source leaves the wordmark white-on-cream (near-invisible) when open, the clone switches the chrome to espresso — documented deviation. The closed menu panel carries `inert={!open}` — `aria-hidden` alone left the hidden links tab-focusable (an invisible-focus WCAG violation); the source mounts its links only while open instead.
@@ -56,16 +61,18 @@ A clean check is: `bun run lint && bun run typecheck && bun run test`. CI (`.git
 - **Security headers ship from `next.config.ts`** (X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy, HSTS; CSP deliberately absent — see PAD §6). `robots.txt` and `sitemap.xml` are generated by `src/app/robots.ts` / `src/app/sitemap.ts` from `SITE_URL`.
 - Every inner page except the legal set opens with an espresso hero band (`bg-primary pt-36/44 pb-20/28`) carrying kicker + h1 — the header assumes it (white wordmark over the dark band). Legal pages are the cream-prose exception (see above); they pass `forceSolid` to the header instead.
 - **The footer's copyright row is measured from the source**: inside the columns' `py-8 md:py-16` container, `mt-16` above a `border-t border-[#F0EFE9]/90` hairline, `pt-8`, legal links stack on mobile (`flex-col md:flex-row gap-6`), full-opacity `text-xs`.
-- Lint and typecheck both ignore `scratch/`, `docs/`, `skills/`, `examples/`, `mini-services/` (reference material, not app code — `eslint.config.mjs` `ignores` + `tsconfig.json` `exclude`, kept in sync).
+- Lint and typecheck both ignore `scratch/`, `docs/`, `skills/`, `examples/`, `backup/`, `mini-services/` (reference material, not app code — `eslint.config.mjs` `ignores` + `tsconfig.json` `exclude`, kept in sync).
 
 ## Testing
 
-- `bun run test` (or `bunx vitest run`) — pure domain tests across `tests/domain.test.ts` + `tests/reset.test.ts` (filters, booking write plans incl. re-activation, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy, reset-token policy, reset delivery); expected values are worked examples, never recomputed by the code under test. `vitest.config.ts` scopes the run to `tests/`, excludes `scratch/`, and enforces 100% coverage on `src/lib/domain/**` under `bun run test:coverage`.
-- New domain logic goes in `lib/domain/` with tests in `tests/`. Actions/pages are verified with the browser (agent-browser flow: sign-up → book → cancel is the golden path; the reset loop is request → link → new password → sign in).
+- `bun run test` (or `bunx vitest run`) — pure domain tests across `tests/domain.test.ts` + `tests/reset.test.ts` + `tests/database-url.test.ts` (filters, booking write plans incl. re-activation, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy, reset-token policy, reset delivery, SQLite URL resolution); expected values are worked examples, never recomputed by the code under test. `vitest.config.ts` scopes the run to `tests/`, excludes `scratch/`/`skills/`/`docs/`/`backup/`, and enforces 100% coverage on `src/lib/domain/**` under `bun run test:coverage`.
+- New domain logic goes in `lib/domain/` with tests in `tests/`. Actions/pages are verified with the browser (agent-browser flow: sign-up → book → cancel is the golden path; the reset loop is request → link → new password → sign in) — and standalone-deployment changes get the same flow re-run against `bun run start`.
 
 ## Environment
 
 `.env.example` documents all variables: `DATABASE_URL`, `SESSION_SECRET` (falls back to a dev constant — set a real `openssl rand -base64 32` value in production), `SITE_URL` (canonical origin for sitemap/OG/reset links), and the optional `RESEND_API_KEY` + `AURA_EMAIL_FROM` pair that switches password-reset delivery from the operator log to real email.
+
+**Deliberate deviation (operator choice, session 11/12):** the repo tracks a real `.env` (force-added past `.gitignore`) so the operator's pull-and-deploy server workflow is self-contained — it carries the deployed `SITE_URL` and a live `SESSION_SECRET`. Acceptable ONLY for this single-operator deployment; never add third-party secrets (`RESEND_API_KEY`, OAuth credentials) to it, and rotate `SESSION_SECRET` (invalidates all sessions — by design) if the repo ever widens its audience.
 
 ## Reference
 

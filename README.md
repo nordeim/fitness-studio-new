@@ -1,6 +1,6 @@
 # AURA Studio — Fitness Studio Clone
 
-![Next.js](https://img.shields.io/badge/Next.js-16.1-black?logo=next.js)
+![Next.js](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?logo=tailwindcss)
@@ -26,7 +26,8 @@ The original is a Base44 template app: a women-only fitness studio marketing sit
 | 💳 | **Pricing & memberships** | Seeded membership plans, class packs, policy pages |
 | 🧑‍🏫 | **Instructor profiles** | Bios, specialties, certifications from the database |
 | ♿ | **Accessibility** | WCAG 2.2 AA targets, keyboard-navigable carousel + lightbox, reduced-motion support |
-| 🧪 | **Tested domain layer** | 48 Vitest tests over the pure booking/filter/money/dial/spotlight/404/reset logic, with a 100% coverage gate on `src/lib/domain/**` (CI-enforced) |
+| 🧪 | **Tested domain layer** | 59 Vitest tests over the pure booking/filter/money/dial/spotlight/404/reset/URL-resolution logic, with a 100% coverage gate on `src/lib/domain/**` (CI-enforced) |
+| 🚀 | **Standalone deployment** | `output: "standalone"` build with app-side SQLite URL resolution (`lib/domain/database-url.ts`) — `bun run build && bun run start` serves the seeded schedule, auth, and booking flows from a persistent `<repo>/db/custom.db`, no env changes needed |
 | 🛡️ | **Hardened delivery** | Security headers (X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, HSTS), env-driven `robots.txt` + `sitemap.xml`, DB-free health endpoint, GitHub Actions CI (lint → typecheck → coverage tests → seeded build) |
 | 🧭 | **Source-measured UI** | Fixed hide-on-scroll header (inert closed menu), espresso page bands, source-matched 404 (slate platform screen, quoted path, full-viewport centered), legal pages at `/privacy` `/terms` `/accessibility` in the source's cream prose layout, footer with copyright hairline |
 
@@ -34,7 +35,7 @@ The original is a Base44 template app: a women-only fitness studio marketing sit
 
 | Layer | Technology | Version | Purpose |
 |---|---|---|---|
-| Framework | Next.js (App Router) | 16.1 | RSC pages, Server Actions, Turbopack |
+| Framework | Next.js (App Router) | 16.3 | RSC pages, Server Actions, Turbopack, standalone output |
 | UI runtime | React | 19 | Component model |
 | Language | TypeScript (strict) | 5.x | Type safety end to end |
 | Styling | Tailwind CSS (CSS-first) | 4.x | Token-driven design system in `globals.css` |
@@ -73,14 +74,16 @@ flowchart TB
     📂 auth/           ← scrypt passwords, HMAC session tokens
     📂 domain/         ← Pure logic (100% coverage-gated): class-filters, booking-rules,
     │                     discipline-wheel, testimonial-spotlight, not-found,
-    │                     reset-policy, reset-delivery
+    │                     reset-policy, reset-delivery, database-url
     📄 result.ts       ← ActionResult<T> contract
     📄 validation.ts   ← Zod schemas
+    📄 db.ts           ← Prisma client + datasource URL anchoring (findSchemaDir)
   📄 app/globals.css   ← Design tokens (HSL) + custom utilities + keyframes
 📂 prisma/schema.prisma ← User, Session, StudioClass, Instructor, Membership, Booking, PasswordResetToken
+📂 prisma/migrations/   ← SQL migrations (db:migrate / db:reset; db:push remains the CI flow)
 📂 public/images/       ← Optimized photography (1600px, q82) incl. footer/packs backdrops
 📂 scripts/seed.ts      ← Idempotent seed
-📂 tests/               ← Vitest suites: domain.test.ts, reset.test.ts (48 tests)
+📂 tests/               ← Vitest suites: domain.test.ts, reset.test.ts, database-url.test.ts (59 tests)
 📂 vitest.config.ts     ← Scopes the suite to tests/; 100% coverage gate on src/lib/domain/**
 📂 .github/workflows/   ← CI: lint → typecheck → coverage tests → db push/seed → build
 📂 docs/                ← SSH push runbook + wrapper (repo ops), session logs,
@@ -120,7 +123,7 @@ Requirements: **Bun ≥ 1.1** (or Node ≥ 20 with npm — commands below are bu
 - `/classes` lists 27 seeded classes; clicking **YOGA** narrows to 8 and the URL becomes `/classes?type=YOGA` (values are case-insensitive — the home page links in as `?type=Yoga`).
 - `/login` → **Create an account** → book any class → **My Bookings** shows it; cancel works.
 - `/privacy`, `/terms`, `/accessibility` render the legal pages in the source's cream prose layout (centered `max-w-3xl` column, Title-Case serif h1, h2 sections); `/legal/*` permanently redirects to them; any unknown URL renders the source-matched slate 404 with the quoted offending path.
-- `bun run lint && bun run typecheck && bun run test` → ESLint clean, typecheck clean, 48/48 tests pass.
+- `bun run lint && bun run typecheck && bun run test` → ESLint clean, typecheck clean, 59/59 tests pass.
 - `/robots.txt` and `/sitemap.xml` respond with the env-driven metadata routes; `/api` answers the DB-free health check.
 
 ## Environment Variables
@@ -140,7 +143,7 @@ bun run test                     # full suite
 bunx vitest run tests/domain.test.ts --reporter verbose
 ```
 
-The suite covers: filter normalization (ALL/absent/unknown/case-insensitive values), schedule sorting, 12-hour clock formatting (incl. malformed-input fail-soft), booking write plans (create / deny DUPLICATE / deny CAPACITY_FULL / re-activate a cancelled row), the 2-hour cancellation window, money formatting (integer cents, unknown-currency fallback), JSON-column round-trips, the discipline-dial rotation math (label angles, dial counter-rotation, shortest-path deltas, zero-slot guards), the testimonial spotlight state machine, the 404 quoted-path copy, the reset-token policy (valid/expired/used/not-found boundaries), and the reset delivery decision + email builder. `bun run test:coverage` enforces 100% statements/branches/functions/lines on `src/lib/domain/**`.
+The suite covers: filter normalization (ALL/absent/unknown/case-insensitive values), schedule sorting, 12-hour clock formatting (incl. malformed-input fail-soft), booking write plans (create / deny DUPLICATE / deny CAPACITY_FULL / re-activate a cancelled row), the 2-hour cancellation window, money formatting (integer cents, unknown-currency fallback), JSON-column round-trips, the discipline-dial rotation math (label angles, dial counter-rotation, shortest-path deltas, zero-slot guards), the testimonial spotlight state machine, the 404 quoted-path copy, the reset-token policy (valid/expired/used/not-found boundaries), the reset delivery decision + email builder, and the SQLite datasource-URL resolution (schema-relative anchoring, absolute/non-SQLite passthrough, POSIX root-clamping). `bun run test:coverage` enforces 100% statements/branches/functions/lines on `src/lib/domain/**`.
 
 ## Design System
 
@@ -160,11 +163,13 @@ The suite covers: filter normalization (ALL/absent/unknown/case-insensitive valu
 ## Deployment
 
 ```bash
-bun run build    # production build
-bun run start    # serve the build (set SESSION_SECRET first)
+bun run build    # production build (standalone output + static/public copy)
+bun run start    # serve .next/standalone/server.js (set SESSION_SECRET first)
 ```
 
-Deploy anywhere Node/Bun runs (Vercel, Fly, Render, Docker). The SQLite file works for single-instance deployments; swap `DATABASE_URL` to Postgres and change the `provider` in `prisma/schema.prisma` for horizontal scale — the schema is otherwise portable.
+The build produces a self-contained `.next/standalone/` tree. Relative `DATABASE_URL`s (`file:../db/custom.db`) are resolved app-side against the real `prisma/schema.prisma` directory — so run-in-place deployments keep the database at `<repo>/db/custom.db`, persistent across rebuilds, exactly where `db:push`/`db:migrate`/the seed put it. Deployments that relocate the standalone tree (Docker `WORKDIR /app`) anchor at the traced `/app/prisma` — mount `/app/db` as a volume — or sidestep resolution entirely by setting `DATABASE_URL` to an absolute `file:` URL. The SQLite file works for single-instance deployments; swap `DATABASE_URL` to Postgres and change the `provider` in `prisma/schema.prisma` for horizontal scale — the schema is otherwise portable.
+
+Server checklist: `bun run db:migrate` (or `db:push`) → `bun run scripts/seed.ts` (idempotent) → `bun run build` → `bun run start`.
 
 ## Contributing
 
