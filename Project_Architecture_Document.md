@@ -52,7 +52,7 @@ This PAD documents `fitness-studio-new` — a from-scratch Next.js 16 rebuild of
 | Database | SQLite | (system) | Zero-config single-file persistence; adequate for single-instance deployment |
 | Validation | Zod | 4.x | One schema per action input; `toFieldErrors` bridges to form errors |
 | Auth | hand-rolled scrypt + HMAC sessions | — | No third-party dependency; no account-existence oracle; DB stores token fingerprints only |
-| Unit tests | Vitest | latest | Fast, ESM-native; tests the pure domain seam |
+| Unit tests | Vitest + @vitest/coverage-v8 | latest | Fast, ESM-native; tests the pure domain seam under a 100% coverage gate |
 | Fonts | Taviraj + Inter | via `next/font/google` | Exact source-site typography, self-hosted, zero CLS |
 | Toasts | sonner | 2.x | Accessible live-region notifications for action feedback |
 
@@ -182,7 +182,8 @@ Layer 4: Components (src/components/site) — client leaves ('use client') for i
 │   └── seed.ts                 ← Idempotent: upsert instructors/memberships by id, classes by natural key
 ├── src/
 │   ├── actions/
-│   │   ├── auth.ts             ← signUp / signIn / signOut / requestPasswordReset (+ safeRedirect local)
+│   │   ├── auth.ts             ← signUp / signIn / signOut / requestPasswordReset / resetPassword
+│   │   │                          (+ requestOrigin/sendResetEmail locals — email channel behind RESEND_API_KEY)
 │   │   └── bookings.ts         ← createBooking / cancelBooking (transactional) + listMyBookings read
 │   ├── app/
 │   │   ├── page.tsx            ← Home: hero → free week → disciplines (dial) → sky → benefits →
@@ -190,40 +191,47 @@ Layer 4: Components (src/components/site) — client leaves ('use client') for i
 │   │   ├── classes/page.tsx    ← Espresso band + searchParams → normalizeFilters → server-filtered cards
 │   │   ├── pricing/page.tsx    ← 5 bands: espresso hero / first-timer / plans / packs-on-photo / policies
 │   │   ├── instructors/page.tsx← Espresso band + philosophy + roster from DB (anchor ids match home links)
-│   │   ├── login/page.tsx      ← Auth shell (redirects authenticated users to /account)
+│   │   ├── login/page.tsx      ← Auth shell (redirects authenticated users; ?token= deep-links new-password mode)
 │   │   ├── account/page.tsx    ← My bookings (auth-gated; redirect to /login?redirect=/account)
 │   │   ├── privacy|terms|accessibility/  ← Legal pages at the source's routes
 │   │   ├── legal/              ← permanentRedirect stubs to the new legal routes
+│   │   ├── robots.ts           ← Env-driven robots.txt (SITE_URL) with Sitemap line
+│   │   ├── sitemap.ts          ← Public-route sitemap from SITE_URL
+│   │   ├── api/route.ts        ← DB-free health check (status/service/timestamp)
 │   │   ├── not-found.tsx       ← Branded 404 (big 404, rule, message, Go home)
-│   │   ├── layout.tsx          ← Root: Taviraj + Inter via next/font, metadata template
+│   │   ├── layout.tsx          ← Root: Taviraj + Inter via next/font, metadata template + metadataBase
 │   │   └── globals.css         ← HSL token block + @theme inline + utilities + keyframes
-│   ├── components/site/
+│   ├── components/site/        ← The ONLY component tree (the shadcn ui/ scaffold was removed — session 8)
 │   │   ├── header.tsx          ← Fixed, hide-on-scroll past 64px; centered Taviraj wordmark (breathe);
 │   │   │                          custom 3-line burger; cream dropdown menu + studio hours
 │   │   ├── footer.tsx          ← Photo backdrop + layered glowing SVG "AURA STUDIO" wordmark + 3 columns
 │   │   ├── schedule-browser.tsx← 'use client': pill filter rails → URL; BOOK buttons → action → toast
-│   │   ├── auth-card.tsx       ← signin|signup|reset modes; Google button (inert, honest toast) + OR divider
+│   │   ├── auth-card.tsx       ← signin|signup|reset|newpass modes; Google button (inert, honest toast) + OR divider
 │   │   ├── booking-row.tsx     ← Account booking + cancel
 │   │   ├── disciplines-section.tsx ← Sticky circular dial (scrollspy) + 4 stacked image cards
 │   │   ├── benefits-carousel.tsx  ← Coverflow slots (±340/680/1020px, scale 0.92/0.84/0.76)
 │   │   ├── coaches-section.tsx   ← Interactive accordion, spring-open info panels (row-reverse alternates)
 │   │   ├── gallery-section.tsx   ← Scattered collage (mask fades, mouse parallax) + lightbox
-│   │   ├── legal-page.tsx        ← Shared legal shell (espresso band + prose sections)
+│   │   ├── legal-page.tsx        ← Shared legal shell (cream prose + sections)
 │   │   ├── aura-button.tsx     ← Measured button spec: rounded, 0.1em→0.2em tracking, arrow-up-right
 │   │   └── sign-out-button.tsx
 │   ├── lib/
-│   │   ├── auth/passwords.ts   ← scrypt hash/verify (self-describing format)
+│   │   ├── auth/passwords.ts   ← scrypt hash/verify (self-describing format; typed promisify)
 │   │   ├── auth/session.ts     ← create/get/destroy; SHA-256(token+secret) fingerprinting
 │   │   ├── domain/class-filters.ts  ← normalizeFilters (case-insensitive), filterClasses, sortClasses, formatTimeClock
 │   │   ├── domain/booking-rules.ts  ← checkBooking, spotsLeft, checkCancellation, formatMoney, parseJsonArray
 │   │   ├── domain/discipline-wheel.ts ← labelAngle / wheelRotation / shortestRotationDelta (pure, tested)
+│   │   ├── domain/reset-policy.ts    ← validateResetTokenState (valid/expired/used/not_found — pure, tested)
+│   │   ├── domain/reset-delivery.ts  ← chooseResetChannel + buildResetEmail (pure, tested)
 │   │   ├── result.ts           ← ActionResult union, ok/err builders, withResult wrapper
 │   │   ├── validation.ts       ← Zod schemas + toFieldErrors
 │   │   └── db.ts               ← Prisma singleton (HMR-safe)
-│   └── app/api/                ← Scaffold health route only (no UI-mutation endpoints)
+│   └── hooks/                  ← (removed — session 8 dead-code sweep)
 ├── tests/
-│   └── domain.test.ts          ← 24 tests over the pure seam
-├── vitest.config.ts            ← Scopes the suite to tests/ (excludes scratch/)
+│   ├── domain.test.ts          ← 36 tests over the pure seam
+│   └── reset.test.ts           ← 12 tests: reset-token policy + delivery
+├── vitest.config.ts            ← Scopes the suite to tests/; 100% coverage gate on src/lib/domain/**
+├── .github/workflows/ci.yml    ← CI: lint → typecheck → coverage tests → db push/seed → build
 ├── docs/                       ← SSH push runbook + wrapper (repository operations)
 └── skills/                     ← The documentation-generation skills that produced these docs
 ```
@@ -467,10 +475,11 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 | Passwords never stored reversibly | scrypt (N=16384, r=8, p=1, 64-byte key), self-describing hash |
 | Sessions unforgeable from a DB leak | DB stores `sha256(token + SESSION_SECRET)`; cookie carries the only token copy |
 | Cookies hardened | `httpOnly`, `sameSite=lax`, `secure` in production, `path=/`, 30-day expiry |
-| No open redirects | `?redirect=` accepted only if it starts with `/` and not `//` or `/\` (checked at page and action layers) |
+| No open redirects | `?redirect=` accepted only if it starts with `/` and not `//` or `/\` (checked at the page layer, the only place a target is accepted) |
 | Booking integrity | transactional guard + `@@unique(userId, classId)` |
 | Secrets never committed | `.gitignore` rejects `.env*` (except `.env.example`), `*.key`, `ssh-key.txt`, `db/*.db` |
 | SQL injection impossible | all queries via the Prisma client; no `$queryRaw` with unparameterized input |
+| Clickjacking / sniffing / leak hardening | security headers on every response from `next.config.ts`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`, `Strict-Transport-Security: max-age=31536000; includeSubDomains`. CSP is deliberately absent — the App Router requires inline bootstrap scripts and Tailwind inline styles, so a nonce-less CSP adds no real protection here; revisit with nonces if the threat model demands it |
 
 ### 6.2 Security Utilities
 
@@ -478,7 +487,7 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 |---|---|---|
 | `hashPassword` / `verifyPassword` | `src/lib/auth/passwords.ts` | scrypt with parameter-carrying format; `timingSafeEqual` comparison |
 | `hashToken` / `createSession` / `getCurrentUser` / `destroySession` | `src/lib/auth/session.ts` | Opaque-token session lifecycle |
-| `safeRedirect` | local to `src/actions/auth.ts` (page-level twin in `login/page.tsx`) | Same-origin redirect guard |
+| `safeRedirect` guard | inlined at the page layer (`login/page.tsx` — the only place a redirect target is accepted) | Same-origin redirect guard (the action layer never redirects; the dead action-local copy was removed in session 8) |
 | `withResult` | `src/lib/result.ts` | Error containment + operator logging |
 | `toFieldErrors` | `src/lib/validation.ts` | Zod → per-field form errors (no internal detail leaks) |
 
@@ -486,13 +495,14 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 
 - **Session model:** random opaque token → httpOnly cookie → SHA-256 fingerprint row in `Session` (unique, indexed). `getCurrentUser()` is the single read seam; expired sessions are deleted on encounter.
 - **Authorization:** member-scoped data access only — `listMyBookings` filters by `userId`; `cancelBookingAction` verifies ownership before mutating. The `role` column exists for a future admin surface; no admin routes are exposed.
-- **Password reset:** single-use, 1-hour tokens (`PasswordResetToken.usedAt`); delivery is the operator log in this environment (`console.info`) — no SMTP is configured, and the client response is identical whether or not the account exists.
+- **Password reset (complete loop):** single-use, 1-hour tokens (`PasswordResetToken.usedAt`). Delivery follows `chooseResetChannel` (`lib/domain/reset-delivery.ts`): the Resend API when `RESEND_API_KEY` is configured, otherwise the operator log (`console.info`) — the dev setup. Either way the client response is identical whether or not the account exists. Consuming a token (`resetPasswordAction`, guarded by the pure `validateResetTokenState` policy) rehashes the password, marks the token used, and revokes every session for the member in one transaction; the `/login?token=…` deep link opens the new-password card.
 
 ### 6.4 Threat Model
 
 | Vector | Mitigation |
 |---|---|
 | Credential stuffing | scrypt cost factors; uniform failure copy (no oracle for user enumeration) |
+| Stolen-cookie persistence after reset | resetPasswordAction deletes every Session row for the member |
 | Session hijack via DB leak | tokens unrecoverable from fingerprints |
 | XSS exfiltrating sessions | httpOnly cookies; no `dangerouslySetInnerHTML` anywhere |
 | Oversell via racing/double-click | transactional guard + unique constraint + disabled-while-pending buttons |
@@ -508,7 +518,8 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 
 | Category | Files | Tests | Location | Framework |
 |---|---|---|---|---|
-| Domain unit | 1 | 32 | `tests/domain.test.ts` | Vitest |
+| Domain unit | 2 | 48 | `tests/domain.test.ts` (36), `tests/reset.test.ts` (12) | Vitest |
+| Coverage gate | — | — | `vitest.config.ts` (100% stmts/branches/functions/lines on `src/lib/domain/**`) | @vitest/coverage-v8 |
 | E2E golden path (manual/browser) | — | — | browser session | agent-browser |
 
 ### 7.2 Test Patterns
@@ -517,16 +528,18 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 - **Boundary coverage:** capacity exactly-0, spots over capacity (floors at 0), cancellation at exactly the 2-hour window, midnight/noon clock formats, malformed time strings pass through unchanged.
 - **Failure-path coverage:** duplicate-vs-capacity precedence, unknown enum values, malformed JSON columns, non-string array members.
 - **Re-booking regression (session 4):** a cancelled row occupies `@@unique([userId, classId])` forever, so `planBookingWrite` must plan a **reactivate** (row update), not a create — the test pins the plan (`reactivate`, bookingId, spotsLeft) and the deny-when-since-filled case.
+- **Reset-token policy (session 8, TDD):** `validateResetTokenState` boundaries — expiry at exactly-now is expired, a used marker dominates expiry, missing rows are `not_found` — plus the delivery decision (`chooseResetChannel`) and email builder (`buildResetEmail`: URL in both bodies, token never in the subject).
 - **Golden path (browser-verified):** sign-up → filter schedule (`?type=YOGA` shows exactly the 8 yoga classes) → book (spots 7→6, "BOOKED ✓", sonner toast) → verify on `/account` → cancel (booking removed, spot released, toast) → **re-book the same class** (cancelled row re-activated, spots 9→10). This exact sequence was executed and observed during the session-4 build.
 
 ### 7.3 Coverage Thresholds
 
-The pure domain seam (`src/lib/domain/`) is at 100% branch coverage by its test file (every exported function has happy-path + boundary + failure cases). No numeric gate is configured in CI yet — see §10.
+The pure domain seam (`src/lib/domain/`) is at 100% statements/branches/functions/lines, enforced by the `bun run test:coverage` gate (configured in `vitest.config.ts`, run in CI). Session 8's first coverage run exposed three genuinely uncovered paths (zero-slot dial guards, `serializeJsonArray`, the malformed-clock and unknown-currency branches) — all now pinned by tests.
 
 ### 7.4 Pre-PR / Pre-Deploy Checklist
 
-- [ ] `bun run lint` exits clean
-- [ ] `bun run test` — 32/32 pass
+- [ ] `bun run lint` exits clean (no-console / prefer-const / no-unused-vars enforced)
+- [ ] `bun run typecheck` exits clean (`tsc --noEmit`; the build no longer ignores type errors)
+- [ ] `bun run test:coverage` — 48/48 pass, 100% gate green on `src/lib/domain/**`
 - [ ] `bun run dev` boots; golden path (sign-up → book → cancel → re-book) exercised in the browser
 - [ ] No `.env`, `db/*.db`, or key material staged (`git status` hygiene)
 - [ ] New domain logic arrived with tests in `tests/domain.test.ts`
@@ -555,7 +568,7 @@ No Dockerfile ships with the repo. Deployment target is any Node/Bun host: `bun 
 
 ### 8.4 CI/CD Pipeline
 
-No hosted CI yet — the local gate (`bun run lint && bun run test`) is the only gate, per the repo's SSH-wrapper operator contract (`docs/how-to-git-push-using-ssh-wrapper_SKILL.md`): gates green → commit → dry-run push → real push with remote verification. Adding GitHub Actions running the same two commands is the first CI task (see §10).
+CI runs on every push and PR to `main` (`.github/workflows/ci.yml`): `bun install --frozen-lockfile` → `prisma generate` → `bun run lint` → `bun run typecheck` → `bun run test:coverage` → `db:push` + seed (throwaway `db/ci.db`) → `bun run build`. This is the same gate the SSH-wrapper operator contract demands (`docs/how-to-git-push-using-ssh-wrapper_SKILL.md`): gates green → commit → dry-run push → real push with remote verification — now enforced by the host, not just the operator.
 
 ---
 
@@ -575,8 +588,9 @@ bun run dev                 # http://localhost:3000
 
 | Command | Where | Purpose |
 |---|---|---|
-| `bun run lint` | repo root | ESLint 9 flat config (ignores docs/, skills/, scratch/) |
-| `bun run test` | repo root | Vitest domain suite |
+| `bun run lint` | repo root | ESLint 9 flat config (ignores docs/, skills/, scratch/; enforces no-console/prefer-const/no-unused-vars) |
+| `bun run typecheck` | repo root | `tsc --noEmit` (excludes docs/, skills/, scratch/ — aligned with eslint) |
+| `bun run test` / `bun run test:coverage` | repo root | Vitest domain suite / suite + 100% domain gate |
 | `bun run db:push` | repo root | Apply schema to SQLite |
 | `bun run scripts/seed.ts` | repo root | Idempotent seed |
 | `python3 docs/ssh_git_wrapper_v3.py --key-file <key> --dry-run` | repo root | Authenticated push rehearsal (see docs runbook) |
@@ -602,12 +616,15 @@ bun run dev                 # http://localhost:3000
 
 | Priority | Issue | Impact | Status |
 |---|---|---|---|
-| MEDIUM | No hosted CI (lint/test gate is local only) | A push can skip the gate | Open — add a GitHub Actions workflow running `bun run lint && bun run test` |
-| MEDIUM | No email delivery: password-reset tokens are operator-logged, not emailed | Members cannot self-serve reset in production | Open — wire Resend/SES behind an env var; token table already exists |
 | LOW | Google sign-in is present but inert (no OAuth provider configured) | The button matches the source flow and explains itself with an honest toast instead of failing silently | Open — wire NextAuth/OAuth when provider credentials exist |
 | LOW | `role` column exists but no admin surface reads it | No admin routes today | Intentional placeholder; no dead code paths expose it |
-| LOW | No numeric coverage gate | Coverage is enforced by convention (§7.3) | Open — `vitest --coverage` + thresholds once CI exists |
 | LOW | Legal copy is original (privacy/terms/accessibility) rather than the source's | Content parity gap; source pages are Base44 placeholder boilerplate | Accepted — original copy is accurate to this implementation, which is the honest choice |
+| — | **Fixed in session 8:** no hosted CI (the gate was local only) | A push could skip the gate | Resolved — `.github/workflows/ci.yml` runs lint → typecheck → coverage-gated tests → seeded production build on every push/PR to main |
+| — | **Fixed in session 8:** password-reset loop was incomplete (tokens created and operator-logged, but no way to consume them) and email delivery was unwired | Members could not actually reset a password | Resolved — complete loop: request → link (Resend when `RESEND_API_KEY` is set, operator log otherwise) → `/login?token=…` new-password card → transactional consume (mark used, rehash, revoke sessions); browser-verified end-to-end |
+| — | **Fixed in session 8:** no numeric coverage gate (100% claim was convention-only) | Coverage claims were unverifiable | Resolved — `bun run test:coverage` enforces 100% statements/branches/functions/lines on `src/lib/domain/**`; the first run caught three genuinely uncovered paths, now tested |
+| — | **Fixed in session 8:** `next.config.ts` had `ignoreBuildErrors: true` (a real TS2554 in `passwords.ts` was masked) and `reactStrictMode: false` | Type errors could ship to production | Resolved — typed the promisified scrypt signature, removed the ignore flag, enabled strict mode; `bun run typecheck` is a first-class gate |
+| — | **Fixed in session 8:** dead scaffold — 48-file shadcn `src/components/ui/` tree + `src/hooks/` (zero imports; the source of the session-4 two-toast-systems bug) and ~55 unused runtime dependencies | Larger attack surface, slower installs, latent confusion | Resolved — removed; dependency list is now exactly what the app imports |
+| — | **Fixed in session 8:** no security headers, no sitemap, hello-world API route | Missing production hardening/SEO surfaces | Resolved — OWASP header set (minus CSP, rationale in §6.1), env-driven `robots.txt` + `sitemap.xml` via metadata routes, DB-free health endpoint |
 | LOW | Header chrome switches to espresso while the source stays white over its cream menu | Visual deviation from the source's near-invisible white-on-cream wordmark | Accepted (accessibility fix) — the close control must stay visible; documented in AGENTS.md |
 | LOW | 404 header uses `forceSolid` (cream+espresso) while the source's is transparent+white over the slate field | The source's wordmark is invisible on its own 404 (platform chrome bug) | Accepted (accessibility fix) — same rationale as the menu-chrome fix |
 | LOW | Menu carries a "Sign in / My bookings" link and the footer a "My Bookings" link; `/login` redirects authenticated users to `/account` | The source exposes no account entry points at all (its auth gates nothing; all its data collections are empty) | Accepted (functional necessity) — the clone's booking requires auth, so the entry points must be discoverable; `/login` redirect is standard UX |
@@ -624,16 +641,18 @@ bun run dev                 # http://localhost:3000
 
 | File | Lines (approx) | Purpose |
 |---|---|---|
-| `prisma/schema.prisma` | ~120 | Six models; the integrity backbone (unique constraints, relations) |
+| `prisma/schema.prisma` | ~120 | Seven models; the integrity backbone (unique constraints, relations) |
 | `src/lib/result.ts` | ~55 | The ActionResult contract every mutation returns |
 | `src/lib/domain/class-filters.ts` | ~130 | Filter normalization (case-insensitive)/sorting/time formatting — the pure seam |
 | `src/lib/domain/booking-rules.ts` | ~105 | Booking write plans (create/deny/re-activate), cancellation window, integer money, JSON columns |
 | `src/lib/domain/discipline-wheel.ts` | ~40 | Dial math: labelAngle / wheelRotation / shortestRotationDelta |
 | `src/lib/domain/testimonial-spotlight.ts` | ~35 | Spotlight state math: quoteFaceVisible / nextActive (hover-freeze semantics) |
 | `src/lib/domain/not-found.ts` | ~10 | `formatNotFoundCopy` — the quoted-path 404 sentence |
+| `src/lib/domain/reset-policy.ts` | ~25 | `validateResetTokenState` — the reset-token state machine (valid/expired/used/not_found) |
+| `src/lib/domain/reset-delivery.ts` | ~45 | `chooseResetChannel` + `buildResetEmail` — delivery decision and message construction |
 | `src/lib/auth/passwords.ts` | ~45 | scrypt hash/verify with parameter-carrying format |
 | `src/lib/auth/session.ts` | ~75 | Opaque-token session lifecycle with HMAC fingerprints |
-| `src/actions/auth.ts` | ~105 | signUp / signIn / signOut / requestPasswordReset |
+| `src/actions/auth.ts` | ~205 | signUp / signIn / signOut / requestPasswordReset / resetPassword + the Resend email channel |
 | `src/actions/bookings.ts` | ~140 | Transactional create/cancel + listMyBookings |
 | `src/app/page.tsx` | ~310 | Home: hero, free-week glow, sky infinity, testimonials + the four interactive sections |
 | `src/app/classes/page.tsx` | ~65 | Schedule page: searchParams → filters → cards |
@@ -643,10 +662,10 @@ bun run dev                 # http://localhost:3000
 | `src/components/site/gallery-section.tsx` | ~190 | Scattered collage with mouse parallax + lightbox |
 | `src/components/site/testimonials-section.tsx` | ~165 | Photo band + rotating flip-card spotlight (client; engine in lib/domain) |
 | `src/app/not-found.tsx` + `not-found-message.tsx` | ~60 | Source-matched slate 404 with quoted pathname inside AURA chrome |
-| `src/components/site/auth-card.tsx` | ~250 | Three-mode auth shell with field errors |
+| `src/components/site/auth-card.tsx` | ~330 | Four-mode auth shell (signin/signup/reset/newpass) with field errors |
 | `src/app/globals.css` | ~180 | Token block, utilities, keyframes, reduced-motion rules |
 | `scripts/seed.ts` | ~200 | Idempotent seed (natural-key upserts) |
-| `tests/domain.test.ts` | ~260 | 32 worked-example tests over the pure seam (dial rotation, spotlight, write plans, 404 copy) |
+| `tests/domain.test.ts` + `tests/reset.test.ts` | ~380 | 48 worked-example tests over the pure seam (dial rotation, spotlight, write plans, 404 copy, reset policy + delivery) |
 
 ---
 

@@ -166,12 +166,12 @@ async function main() {
   for (const instructor of INSTRUCTORS) {
     await db.instructor.upsert({ where: { id: instructor.id }, update: instructor, create: instructor })
   }
-  console.log(`Seeded ${INSTRUCTORS.length} instructors`)
+  console.info(`Seeded ${INSTRUCTORS.length} instructors`)
 
   for (const membership of MEMBERSHIPS) {
     await db.membership.upsert({ where: { id: membership.id }, update: membership, create: membership })
   }
-  console.log(`Seeded ${MEMBERSHIPS.length} memberships`)
+  console.info(`Seeded ${MEMBERSHIPS.length} memberships`)
 
   // Classes are keyed by natural key (title + day + start) — upsert for idempotence.
   let created = 0
@@ -188,14 +188,14 @@ async function main() {
       created++
     }
   }
-  console.log(`Seeded ${SCHEDULE.length} classes (${created} new)`)
+  console.info(`Seeded ${SCHEDULE.length} classes (${created} new)`)
 
   const counts = {
     instructors: await db.instructor.count(),
     memberships: await db.membership.count(),
     classes: await db.studioClass.count(),
   }
-  console.log('Final counts:', counts)
+  console.info('Final counts:', counts)
 }
 
 main()

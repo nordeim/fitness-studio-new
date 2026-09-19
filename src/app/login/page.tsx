@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirect?: string }>
+  searchParams: Promise<{ redirect?: string; token?: string }>
 }) {
   const user = await getCurrentUser()
   if (user) redirect('/account')
@@ -20,6 +20,8 @@ export default async function LoginPage({
   const params = await searchParams
   const raw = typeof params.redirect === 'string' ? params.redirect : ''
   const safeTarget = raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') ? raw : '/account'
+  // Deep link from a reset email: /login?token=... opens the new-password card.
+  const resetToken = typeof params.token === 'string' ? params.token.trim() : ''
 
   return (
     <div className="relative flex min-h-screen flex-col bg-primary">
@@ -36,7 +38,7 @@ export default async function LoginPage({
       </div>
 
       <main className="relative z-10 flex flex-1 items-center justify-center px-6 py-16">
-        <AuthCard redirectTarget={safeTarget} />
+        <AuthCard redirectTarget={safeTarget} initialResetToken={resetToken} />
       </main>
     </div>
   )

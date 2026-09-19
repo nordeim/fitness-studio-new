@@ -14,7 +14,7 @@ const INTENSITY_BADGE: Record<string, string> = {
 
 export function BookingRow({ booking }: { booking: BookingView }) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const [isPending] = useTransition()
 
   const cancel = async () => {
     const fd = new FormData()

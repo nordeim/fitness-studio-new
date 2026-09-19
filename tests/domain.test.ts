@@ -26,6 +26,7 @@ import {
   checkCancellation,
   formatMoney,
   parseJsonArray,
+  serializeJsonArray,
 } from '../src/lib/domain/booking-rules'
 import { formatNotFoundCopy } from '../src/lib/domain/not-found'
 import {
@@ -122,6 +123,13 @@ describe('schedule ordering and labels', () => {
     expect(durationMinutes('06:00', '07:00')).toBe(60)
     expect(durationMinutes('23:00', '00:30')).toBe(90)
   })
+
+  it('treats malformed clock strings as 00:00 in durations (fail-soft)', () => {
+    // a garbage start counts as midnight: 00:00 -> 01:00 is one hour
+    expect(durationMinutes('nonsense', '01:00')).toBe(60)
+    // a bare hour reads as HH:00 — 9:00 to 01:00 (next day) is 16h
+    expect(durationMinutes('9', '01:00')).toBe(960)
+  })
 })
 
 describe('booking rules', () => {
@@ -199,6 +207,11 @@ describe('money and JSON columns', () => {
     expect(formatMoney(5)).toBe('$0.05')
   })
 
+  it('renders a bare amount for unknown currencies (no symbol invented)', () => {
+    expect(formatMoney(2800, 'EUR')).toBe('28')
+    expect(formatMoney(12050, 'GBP')).toBe('120.50')
+  })
+
   it('parses JSON array columns defensively', () => {
     expect(parseJsonArray(null)).toEqual([])
     expect(parseJsonArray('[]')).toEqual([])
@@ -206,6 +219,11 @@ describe('money and JSON columns', () => {
     expect(parseJsonArray('not json')).toEqual([])
     expect(parseJsonArray('["a", 42, null]')).toEqual(['a'])
     expect(parseJsonArray('{"a":1}')).toEqual([])
+  })
+
+  it('serializes JSON array columns and round-trips through the parser', () => {
+    expect(serializeJsonArray(['Vinyasa Flow', 'Yin Yoga'])).toBe('["Vinyasa Flow","Yin Yoga"]')
+    expect(parseJsonArray(serializeJsonArray(['a', 'b']))).toEqual(['a', 'b'])
   })
 })
 
@@ -232,6 +250,12 @@ describe('discipline wheel rotation (measured from source dial)', () => {
     // 3 -> 0 wraps counterclockwise (-90), 0 -> 3 wraps clockwise (+90)
     expect(shortestRotationDelta(3, 0, 4)).toBe(-90)
     expect(shortestRotationDelta(0, 3, 4)).toBe(90)
+  })
+
+  it('degenerates safely on a zero-slot dial (defensive guards)', () => {
+    expect(labelAngle(2, 0)).toBe(0)
+    expect(wheelRotation(1, 0)).toBe(0)
+    expect(shortestRotationDelta(1, 2, 0)).toBe(0)
   })
 })
 

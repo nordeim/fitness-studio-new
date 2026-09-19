@@ -18,6 +18,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.SITE_URL ?? 'http://localhost:3000'),
   title: {
     default: 'AURA Studio — Strength Redefined',
     template: '%s | AURA Studio',

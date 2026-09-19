@@ -35,7 +35,9 @@ export default async function ClassesPage({
   ])
 
   const myClassIds = new Set(
-    allClasses.flatMap((c) => c.bookings.filter((b) => b.userId === user?.id).map((b) => c.id)),
+    allClasses
+      .filter((c) => c.bookings.some((b) => b.userId === user?.id))
+      .map((c) => c.id),
   )
 
   const sorted = sortClasses(

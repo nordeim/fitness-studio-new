@@ -9,10 +9,10 @@ import {
   signUpAction,
   signInAction,
   requestPasswordResetAction,
-  signOutAction,
+  resetPasswordAction,
 } from '@/actions/auth'
 
-type Mode = 'signin' | 'signup' | 'reset'
+type Mode = 'signin' | 'signup' | 'reset' | 'newpass'
 
 /**
  * Auth card: sign-in / sign-up / password-reset states in one shell,
@@ -20,9 +20,15 @@ type Mode = 'signin' | 'signup' | 'reset'
  * replaced by an honest "coming soon" note since no OAuth provider is
  * configured in this deployment).
  */
-export function AuthCard({ redirectTarget }: { redirectTarget: string }) {
+export function AuthCard({
+  redirectTarget,
+  initialResetToken = '',
+}: {
+  redirectTarget: string
+  initialResetToken?: string
+}) {
   const router = useRouter()
-  const [mode, setMode] = useState<Mode>('signin')
+  const [mode, setMode] = useState<Mode>(initialResetToken ? 'newpass' : 'signin')
   const [isPending, startTransition] = useTransition()
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
 
@@ -39,6 +45,8 @@ export function AuthCard({ redirectTarget }: { redirectTarget: string }) {
       result = await signInAction(formData)
     } else if (mode === 'signup') {
       result = await signUpAction(formData)
+    } else if (mode === 'newpass') {
+      result = await resetPasswordAction(formData)
     } else {
       result = await requestPasswordResetAction(formData)
     }
@@ -46,6 +54,10 @@ export function AuthCard({ redirectTarget }: { redirectTarget: string }) {
     if (result.ok) {
       if (mode === 'reset') {
         toast.success('If an account exists for that email, a reset link is on its way.')
+        switchMode('signin')
+      } else if (mode === 'newpass') {
+        toast.success('Password updated. Sign in with your new password.')
+        router.replace('/login')
         switchMode('signin')
       } else {
         toast.success(mode === 'signup' ? 'Welcome to AURA.' : 'Welcome back.')
@@ -90,10 +102,16 @@ export function AuthCard({ redirectTarget }: { redirectTarget: string }) {
             Reset your password
           </h1>
         )}
+        {mode === 'newpass' && (
+          <h1 className="font-heading mt-6 text-4xl font-extralight italic text-primary-foreground">
+            Choose a new password
+          </h1>
+        )}
         <p className="mt-3 text-sm text-primary-foreground/60">
           {mode === 'signin' && 'Sign in to continue your journey'}
           {mode === 'signup' && 'Your first week is on us'}
           {mode === 'reset' && 'We\u2019ll send you a reset link'}
+          {mode === 'newpass' && 'Your reset link is valid for one hour'}
         </p>
       </div>
 
@@ -103,8 +121,14 @@ export function AuthCard({ redirectTarget }: { redirectTarget: string }) {
             Enter the email tied to your membership and we&apos;ll send a reset link.
           </p>
         )}
+        {mode === 'newpass' && (
+          <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
+            Pick the next password carefully — after this, your other devices will
+            be signed out for safety.
+          </p>
+        )}
 
-        {mode !== 'reset' && (
+        {mode !== 'reset' && mode !== 'newpass' && (
           <>
             {/* Google sign-in — present for parity with the source flow;
                 no OAuth provider is wired in this deployment, so it explains
@@ -145,6 +169,7 @@ export function AuthCard({ redirectTarget }: { redirectTarget: string }) {
         )}
 
         <form action={handleSubmit} className="space-y-5" noValidate>
+          {mode === 'newpass' && <input type="hidden" name="token" value={initialResetToken} />}
           {mode === 'signup' && (
             <div>
               <label htmlFor="auth-name" className={labelClasses}>
@@ -169,27 +194,29 @@ export function AuthCard({ redirectTarget }: { redirectTarget: string }) {
             </div>
           )}
 
-          <div>
-            <label htmlFor="auth-email" className={labelClasses}>
-              Email
-            </label>
-            <input
-              id="auth-email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              aria-invalid={Boolean(fieldErrors.email)}
-              aria-describedby={fieldErrors.email ? 'auth-email-error' : undefined}
-              className={inputClasses}
-              placeholder="you@example.com"
-            />
-            {fieldErrors.email && (
-              <p id="auth-email-error" className={errorClasses} role="alert">
-                {fieldErrors.email[0]}
-              </p>
-            )}
-          </div>
+          {mode !== 'newpass' && (
+            <div>
+              <label htmlFor="auth-email" className={labelClasses}>
+                Email
+              </label>
+              <input
+                id="auth-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                aria-invalid={Boolean(fieldErrors.email)}
+                aria-describedby={fieldErrors.email ? 'auth-email-error' : undefined}
+                className={inputClasses}
+                placeholder="you@example.com"
+              />
+              {fieldErrors.email && (
+                <p id="auth-email-error" className={errorClasses} role="alert">
+                  {fieldErrors.email[0]}
+                </p>
+              )}
+            </div>
+          )}
 
           {mode !== 'reset' && (
             <div>
@@ -200,13 +227,13 @@ export function AuthCard({ redirectTarget }: { redirectTarget: string }) {
                 id="auth-password"
                 name="password"
                 type="password"
-                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
                 required
-                minLength={mode === 'signup' ? 8 : undefined}
+                minLength={mode === 'signup' || mode === 'newpass' ? 8 : undefined}
                 aria-invalid={Boolean(fieldErrors.password)}
                 aria-describedby={fieldErrors.password ? 'auth-password-error' : undefined}
                 className={inputClasses}
-                placeholder={mode === 'signup' ? 'At least 8 characters' : '••••••••'}
+                placeholder={mode === 'signup' || mode === 'newpass' ? 'At least 8 characters' : '••••••••'}
               />
               {fieldErrors.password && (
                 <p id="auth-password-error" className={errorClasses} role="alert">
@@ -216,7 +243,7 @@ export function AuthCard({ redirectTarget }: { redirectTarget: string }) {
             </div>
           )}
 
-          {mode === 'signup' && (
+          {(mode === 'signup' || mode === 'newpass') && (
             <div>
               <label htmlFor="auth-confirm" className={labelClasses}>
                 Confirm password
@@ -244,7 +271,9 @@ export function AuthCard({ redirectTarget }: { redirectTarget: string }) {
                 ? 'Sign in'
                 : mode === 'signup'
                   ? 'Create account'
-                  : 'Send reset link'}
+                  : mode === 'newpass'
+                    ? 'Update password'
+                    : 'Send reset link'}
           </button>
         </form>
 
@@ -284,7 +313,7 @@ export function AuthCard({ redirectTarget }: { redirectTarget: string }) {
               </button>
             </p>
           )}
-          {mode === 'reset' && (
+          {(mode === 'reset' || mode === 'newpass') && (
             <p className="text-muted-foreground">
               <button
                 type="button"

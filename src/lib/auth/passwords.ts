@@ -3,10 +3,20 @@
  * Format: scrypt$N$r$p$saltB64$hashB64 (self-describing; parameters travel
  * with the hash so they can be raised later without invalidating old hashes).
  */
-import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto'
+import { randomBytes, scrypt as scryptCb, timingSafeEqual, type ScryptOptions } from 'node:crypto'
 import { promisify } from 'node:util'
 
-const scrypt = promisify(scryptCb)
+/**
+ * promisify() collapses scrypt's overloads onto the first one (3 args), so the
+ * options-carrying call below is a TS2554 at the call site. Pin the exact
+ * signature we use: (password, salt, keylen, options) -> Promise<Buffer>.
+ */
+const scrypt = promisify(scryptCb) as (
+  password: string | Buffer,
+  salt: string | Buffer,
+  keylen: number,
+  options: ScryptOptions,
+) => Promise<Buffer>
 
 const N = 16384 // CPU/memory cost
 const R = 8 // block size

@@ -34,6 +34,14 @@ export const signInSchema = z.object({
 
 export const resetRequestSchema = z.object({ email })
 
+/** Consume a reset token: token comes from the email link, password is the new one. */
+export const resetPasswordSchema = z.object({
+  token: z.string().trim().min(20, 'This reset link is invalid or has expired.'),
+  password,
+})
+
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
+
 export const bookingSchema = z.object({
   classId: z.string().trim().min(1),
 })

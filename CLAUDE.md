@@ -9,7 +9,7 @@ last_updated: 2026-09-19
 
 Production clone of `fitness-studio.base44.app` ("AURA Studio"), a women-only boutique fitness studio: marketing site, class schedule with booking, memberships & pricing, instructor profiles, and member accounts. Single Next.js 16 App Router application with Prisma + SQLite and hand-rolled session auth. The clone preserves the source app's design tokens (espresso/cream/butter palette, Taviraj + Inter) and its four domain entities (StudioClass, Instructor, Membership, Booking).
 
-**Stack**: Bun · Next.js 16.1 (App Router, Turbopack) · React 19 · TypeScript 5 (strict) · Tailwind CSS v4 (CSS-first) · shadcn-style components on Radix · Prisma 6 + SQLite · Zod 4 · Vitest · sonner (toasts).
+**Stack**: Bun · Next.js 16.1 (App Router, Turbopack) · React 19 (strict mode) · TypeScript 5 (strict — `bun run typecheck` must be clean; the build does not ignore errors) · Tailwind CSS v4 (CSS-first) · Prisma 6 + SQLite · Zod 4 · Vitest (coverage-gated) · sonner (toasts).
 
 ## Foundational Principles
 
@@ -58,6 +58,8 @@ Production clone of `fitness-studio.base44.app` ("AURA Studio"), a women-only bo
 - Opaque session tokens: 32 random bytes in an httpOnly cookie; the DB stores `sha256(token + SESSION_SECRET)` — a DB leak is not session forgery.
 - `getCurrentUser()` resolves the member per request and sweeps expired sessions opportunistically.
 - Uniform "Invalid email or password" (no account-existence oracle); password-reset confirmation is likewise unconditional.
+- **Complete reset loop**: `requestPasswordResetAction` creates a single-use 1-hour token and delivers the link by email (Resend, when `RESEND_API_KEY` is set) or the operator log; `/login?token=…` opens the new-password card; `resetPasswordAction` validates the token via the pure `validateResetTokenState` policy, rehashes the password, marks the token used, and revokes every session for the member — all in one transaction.
+- Security headers (X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy, HSTS) ship from `next.config.ts`; CSP is deliberately absent (Next.js App Router requires inline bootstrap scripts — see PAD §6.4).
 
 ## Development Workflow
 
@@ -71,32 +73,36 @@ bun run scripts/seed.ts       # 4 instructors, 3 memberships, 27 classes
 bun run dev                   # http://localhost:3000
 ```
 
+CI (`.github/workflows/ci.yml`) runs the full gate — lint → typecheck → coverage-gated tests → db push/seed → production build — on every push and PR to `main`.
+
 ### Build Commands
 
 | Command | Purpose |
 |---|---|
 | `bun run dev` | Dev server :3000 |
-| `bun run lint` | ESLint 9 flat config — must be clean |
-| `bun run test` | Vitest domain suite |
+| `bun run lint` | ESLint 9 flat config — must be clean (no-console/prefer-const/no-unused-vars enforced) |
+| `bun run typecheck` | `tsc --noEmit` — must be clean |
+| `bun run test` | Vitest domain suite (48 tests) |
+| `bun run test:coverage` | Suite + 100% coverage gate on `src/lib/domain/**` |
 | `bun run db:push` / `bun run db:generate` | Schema lifecycle |
 | `bun run scripts/seed.ts` | Idempotent seed |
 | `bun run build` | Production build |
 
-Clean check order: `bun run lint && bun run test`.
+Clean check order: `bun run lint && bun run typecheck && bun run test`.
 
 ## Testing Strategy
 
 | Level | Tool | Location | Notes |
 |---|---|---|---|
-| Unit | Vitest | `tests/domain.test.ts` | Filters, schedule sorting, time formatting, booking write plans (create/deny/re-activate), cancellation window, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy |
-| E2E (manual) | Browser | — | Golden path: sign-up → filter schedule → book → verify "Booked ✓" + toast → cancel from /account → re-book (re-activation) |
+| Unit | Vitest | `tests/domain.test.ts`, `tests/reset.test.ts` | Filters, schedule sorting, time formatting, booking write plans (create/deny/re-activate), cancellation window, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy, reset-token policy (valid/expired/used/not_found boundaries), reset delivery channel + email builder. 100% coverage enforced on `src/lib/domain/**` |
+| E2E (manual) | Browser | — | Golden path: sign-up → filter schedule → book → verify "Booked ✓" + toast → cancel from /account → re-book (re-activation). Reset loop: request → open link → new password → sign in → old password rejected → token reuse rejected |
 
 - Expected values in tests are worked examples (e.g. `formatTimeClock('18:45') === '6:45 PM'`), never recomputed by the same code under test.
 - New pure logic lands in `lib/domain/` with tests; a red test is a regression or a wrong test — never skip to pass.
 
 ## Code Quality Standards
 
-- No `console.log` in app code (warn/error/info are fine — the password-reset token log is intentional, see `lib/auth`).
+- No `console.log` in app code — ESLint `no-console` enforces it (warn/error/info allowed; the password-reset link log is intentional, see `lib/auth`).
 - Caught errors are logged with context (`withResult` labels every action) — silent `catch` blocks are forbidden.
 - UI: explicit empty/loading/error states; visible focus rings (`focus-visible:outline-2`); semantic landmarks; `role="status"` for spots-left live region. Buttons measure ~36px tall (source parity, above the 24px WCAG 2.2 AA target minimum); primary controls keep ≥44px targets where the layout allows.
 - Accessibility target: WCAG 2.2 AA (cream-on-espresso and espresso-on-cream pairings both clear 4.5:1).
