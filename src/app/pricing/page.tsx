@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import { SiteHeader } from '@/components/site/header'
 import { SiteFooter } from '@/components/site/footer'
 import { AuraButton } from '@/components/site/aura-button'
@@ -37,66 +38,80 @@ const POLICIES = [
   },
 ] as const
 
+/**
+ * Pricing — mirrors the source's five-band composition: espresso hero,
+ * butter-gradient first-timer band, membership plans on cream, class packs
+ * over a studio photograph, and the fine-print grid.
+ */
 export default async function PricingPage() {
   const memberships = await db.membership.findMany({ orderBy: { sortOrder: 'asc' } })
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <SiteHeader variant="solid" />
-      <main className="flex-1 px-6 pb-24 pt-28 md:px-10 md:pt-36">
-        <div className="mx-auto max-w-6xl">
-          <p className="kicker text-primary/60">The investment suite</p>
-          <h1 className="font-heading mt-4 text-5xl font-extralight italic tracking-tight text-primary md:text-7xl">
-            Pricing &amp; memberships
-          </h1>
-          <p className="mt-6 max-w-md text-sm leading-relaxed text-muted-foreground md:text-base">
-            This is not an expense. This is the most valuable investment you&apos;ll make in
-            yourself.
-          </p>
-
-          {/* First-timer special */}
-          <section
-            aria-labelledby="first-timer"
-            className="mt-16 rounded-2xl px-8 py-14 text-center md:py-20"
-            style={{ background: 'linear-gradient(to top, #FFFAA4, #F6BF8E)' }}
-          >
-            <p className="kicker text-primary/70">First-timer special</p>
-            <h2
-              id="first-timer"
-              className="font-heading mt-4 text-5xl font-extralight italic tracking-tight text-primary md:text-6xl"
-            >
-              7 days free
-            </h2>
-            <p className="mx-auto mt-6 max-w-md text-sm leading-relaxed text-primary/80">
-              No commitment. No card on file. Just you and an entire week of unlimited classes to
-              discover your path.
+      <SiteHeader />
+      <main className="flex-1">
+        {/* 1 — Espresso hero band */}
+        <section className="bg-primary px-6 pb-20 pt-36 text-primary-foreground md:px-[8vw] md:pb-28 md:pt-44">
+          <div className="max-w-[1400px]">
+            <p className="kicker mb-4 opacity-60">The investment suite</p>
+            <h1 className="font-heading text-5xl font-light leading-tight md:text-7xl">
+              Pricing &amp; memberships
+            </h1>
+            <p className="mt-6 max-w-md font-body text-sm leading-relaxed opacity-70 md:text-base">
+              This is not an expense. This is the most valuable investment you&apos;ll make in
+              yourself.
             </p>
-            <div className="mt-8 flex justify-center">
-              <AuraButton href="/login" variant="dark">
-                Start free week
-              </AuraButton>
-            </div>
-          </section>
+          </div>
+        </section>
 
-          {/* Membership plans */}
-          <section aria-labelledby="plans" className="mt-20">
-            <p className="kicker text-primary/60">Membership plans</p>
-            <h2
-              id="plans"
-              className="font-heading mt-4 text-4xl font-extralight italic tracking-tight text-primary md:text-5xl"
-            >
-              Choose your commitment
-            </h2>
-            <div className="mt-10 grid gap-6 md:grid-cols-3">
+        {/* 2 — First-timer special: butter → cream diagonal band */}
+        <section
+          aria-labelledby="first-timer"
+          className="px-6 py-16 text-primary md:px-[8vw] md:py-20"
+          style={{ background: 'linear-gradient(135deg, #FFFAA4 0%, #F0EFE9 100%)' }}
+        >
+          <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-8 md:flex-row">
+            <div>
+              <p className="kicker mb-3 opacity-80">First-timer special</p>
+              <h2
+                id="first-timer"
+                className="font-heading text-2xl font-light md:text-4xl"
+              >
+                7 days free
+              </h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed opacity-80">
+                No commitment. No card on file. Just you and an entire week of unlimited classes
+                to discover your path.
+              </p>
+            </div>
+            <AuraButton href="/classes" variant="dark" className="shrink-0">
+              Start free week
+            </AuraButton>
+          </div>
+        </section>
+
+        {/* 3 — Membership plans (seeded — the source's collection is empty) */}
+        <section aria-labelledby="plans" className="px-6 py-16 md:px-[8vw] md:py-24">
+          <div className="max-w-[1400px]">
+            <div className="mb-16">
+              <p className="kicker mb-4 text-primary">Membership plans</p>
+              <h2
+                id="plans"
+                className="font-heading text-3xl font-light leading-tight tracking-tight text-primary md:text-5xl"
+              >
+                Choose your commitment
+              </h2>
+            </div>
+            <div className="grid gap-6 md:grid-cols-3">
               {memberships.map((m) => {
                 const features = parseJsonArray(m.features)
                 return (
                   <article
                     key={m.id}
-                    className={`flex flex-col rounded-xl border bg-background p-8 ${
+                    className={`flex flex-col rounded-2xl border bg-background p-8 ${
                       m.isFeatured
-                        ? 'border-primary shadow-md ring-1 ring-primary/20'
-                        : 'border-border'
+                        ? 'border-primary shadow-[rgba(230,146,76,0.12)_0_12px_20px_4px]'
+                        : 'border-border/50'
                     }`}
                   >
                     {m.isFeatured && (
@@ -106,7 +121,7 @@ export default async function PricingPage() {
                     )}
                     <h3 className="font-heading text-3xl font-light text-primary">{m.name}</h3>
                     <p className="mt-4">
-                      <span className="font-heading text-5xl font-extralight text-primary">
+                      <span className="font-heading text-5xl font-light text-primary">
                         {formatMoney(m.priceCents)}
                       </span>
                       <span className="ml-2 text-sm text-muted-foreground">
@@ -120,8 +135,14 @@ export default async function PricingPage() {
                     )}
                     <ul className="mt-6 flex-1 space-y-3">
                       {features.map((f) => (
-                        <li key={f} className="flex gap-3 text-sm leading-relaxed text-muted-foreground">
-                          <span aria-hidden="true" className="mt-2 h-1 w-4 shrink-0 bg-primary/50" />
+                        <li
+                          key={f}
+                          className="flex gap-3 text-sm leading-relaxed text-muted-foreground"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="mt-2 h-1 w-4 shrink-0 bg-primary/50"
+                          />
                           {f}
                         </li>
                       ))}
@@ -137,54 +158,79 @@ export default async function PricingPage() {
                 )
               })}
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* Class packages */}
-          <section aria-labelledby="packs" className="mt-20">
-            <p className="kicker text-primary/60">Class packages</p>
-            <h2
-              id="packs"
-              className="font-heading mt-4 text-4xl font-extralight italic tracking-tight text-primary md:text-5xl"
-            >
-              Pay per session
-            </h2>
-            <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
-              {CLASS_PACKS.map((p) => (
-                <article
-                  key={p.name}
-                  className="rounded-xl border border-border bg-secondary/40 p-6 text-center md:p-8"
+        {/* 4 — Class packages over the studio photograph */}
+        <section
+          aria-labelledby="packs"
+          className="flex flex-col justify-center px-6 py-24 text-primary-foreground md:px-[8vw] md:py-40"
+        >
+          <div className="relative mx-auto w-full max-w-[1400px]">
+            <Image
+              src="/images/packs-bg.jpg"
+              alt=""
+              fill
+              sizes="100vw"
+              className="object-cover object-top"
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
+            <div className="relative">
+              <div className="mb-16">
+                <p className="kicker mb-4">Class packages</p>
+                <h2
+                  id="packs"
+                  className="font-heading text-3xl font-light leading-tight tracking-tight md:text-5xl"
                 >
-                  <p className="font-heading text-4xl font-extralight text-primary md:text-5xl">
-                    {formatMoney(p.priceCents)}
-                  </p>
-                  <p className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-primary/70">
-                    {p.label}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">{p.name}</p>
-                </article>
-              ))}
+                  Pay per session
+                </h2>
+              </div>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                {CLASS_PACKS.map((p) => (
+                  <article
+                    key={p.name}
+                    className="rounded-2xl border border-border/50 bg-background p-6 text-center text-primary md:p-8"
+                  >
+                    <p className="font-heading text-3xl font-light md:text-4xl">
+                      {formatMoney(p.priceCents)}
+                    </p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.15em] text-primary">
+                      {p.label}
+                    </p>
+                    <p className="font-heading mt-1 text-lg">{p.name}</p>
+                  </article>
+                ))}
+              </div>
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* Policies */}
-          <section aria-labelledby="policies" className="mt-20">
-            <p className="kicker text-primary/60">Fine print</p>
-            <h2
-              id="policies"
-              className="font-heading mt-4 text-4xl font-extralight italic tracking-tight text-primary md:text-5xl"
-            >
-              Policies
-            </h2>
-            <div className="mt-10 grid gap-6 md:grid-cols-2">
+        {/* 5 — Fine print */}
+        <section aria-labelledby="policies" className="px-6 py-16 md:px-[8vw] md:py-24">
+          <div className="max-w-[1400px]">
+            <div className="mb-16">
+              <p className="kicker mb-4 text-primary">Fine print</p>
+              <h2
+                id="policies"
+                className="font-heading text-3xl font-light leading-tight tracking-tight text-primary md:text-5xl"
+              >
+                Policies
+              </h2>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2">
               {POLICIES.map((p) => (
-                <article key={p.title} className="rounded-xl border border-border p-8">
+                <article
+                  key={p.title}
+                  className="rounded-2xl border border-border/50 p-8"
+                >
                   <h3 className="font-heading text-2xl font-light text-primary">{p.title}</h3>
                   <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{p.body}</p>
                 </article>
               ))}
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </main>
       <SiteFooter />
     </div>

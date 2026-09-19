@@ -91,10 +91,10 @@ export function ScheduleBrowser({
       aria-pressed={pressed}
       onClick={onClick}
       className={cn(
-        'min-h-11 border px-5 py-2 font-body text-[11px] font-medium uppercase tracking-[0.25em] transition-colors',
+        'min-h-11 rounded-full border px-4 py-2 font-body text-xs font-medium uppercase tracking-[0.15em] transition-all duration-300',
         pressed
           ? 'border-primary bg-primary text-primary-foreground'
-          : 'border-border text-primary/70 hover:border-primary hover:text-primary',
+          : 'border-border bg-transparent text-muted-foreground hover:border-primary hover:text-foreground',
       )}
     >
       {label}
@@ -104,8 +104,8 @@ export function ScheduleBrowser({
   return (
     <div aria-busy={isPending}>
       {/* TYPE */}
-      <div className="mt-10">
-        <h2 className="kicker text-primary/60">Type</h2>
+      <div>
+        <h2 className="mb-3 text-xs uppercase tracking-[0.2em] text-muted-foreground">Type</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           {railButton('All', !initialFilters.type, () => setFilter('type', null))}
           {CLASS_TYPES.map((t) =>
@@ -116,7 +116,9 @@ export function ScheduleBrowser({
 
       {/* INTENSITY */}
       <div className="mt-8">
-        <h2 className="kicker text-primary/60">Intensity</h2>
+        <h2 className="mb-3 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          Intensity
+        </h2>
         <div className="mt-3 flex flex-wrap gap-2">
           {railButton('All', !initialFilters.intensity, () => setFilter('intensity', null))}
           {INTENSITIES.map((i) =>
@@ -127,7 +129,7 @@ export function ScheduleBrowser({
 
       {/* DAY */}
       <div className="mt-8">
-        <h2 className="kicker text-primary/60">Day</h2>
+        <h2 className="mb-3 text-xs uppercase tracking-[0.2em] text-muted-foreground">Day</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           {railButton('All', !initialFilters.day, () => setFilter('day', null))}
           {DAYS_OF_WEEK.map((d) =>
@@ -138,18 +140,15 @@ export function ScheduleBrowser({
 
       {/* Results */}
       {visible.length === 0 ? (
-        <div className="mt-14 rounded-xl border border-border bg-secondary/40 px-8 py-16 text-center">
-          <p className="font-heading text-2xl font-light italic text-primary">
+        <div className="py-24 text-center">
+          <p className="font-heading text-2xl font-light text-primary">
             No classes match your filters
-          </p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Try widening a rail or two — the week is full of options.
           </p>
           {active && (
             <button
               type="button"
               onClick={clearAll}
-              className="mt-6 min-h-11 border border-primary px-6 py-3 font-body text-[11px] font-medium uppercase tracking-[0.3em] text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+              className="mt-4 min-h-11 text-sm text-accent underline transition-opacity hover:opacity-75"
             >
               Clear all filters
             </button>

@@ -24,20 +24,25 @@ export default async function AccountPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <SiteHeader variant="solid" />
-      <main className="flex-1 px-6 pb-24 pt-28 md:px-10 md:pt-36">
+      <SiteHeader />
+      <main className="flex-1">
+        {/* Espresso hero band — same page-header treatment as every inner page */}
+        <section className="bg-primary px-6 pb-20 pt-36 text-primary-foreground md:px-[8vw] md:pb-28 md:pt-44">
+          <div className="max-w-[1400px]">
+            <p className="kicker mb-4 opacity-60">Member area</p>
+            <h1 className="font-heading text-5xl font-light leading-tight md:text-7xl">
+              Hello, {firstName}
+            </h1>
+            <p className="mt-6 flex flex-wrap items-center gap-2 text-sm opacity-70">
+              <span>Signed in as {user.email}</span>
+              <span aria-hidden="true">·</span>
+              <SignOutButton />
+            </p>
+          </div>
+        </section>
+        <section className="px-6 py-16 md:px-[8vw] md:py-24">
         <div className="mx-auto max-w-4xl">
-          <p className="kicker text-primary/60">Member area</p>
-          <h1 className="font-heading mt-4 text-5xl font-extralight italic tracking-tight text-primary md:text-6xl">
-            Hello, {firstName}
-          </h1>
-          <p className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span>Signed in as {user.email}</span>
-            <span aria-hidden="true">·</span>
-            <SignOutButton />
-          </p>
-
-          <section aria-labelledby="upcoming" className="mt-12">
+          <section aria-labelledby="upcoming">
             <h2 id="upcoming" className="font-heading text-3xl font-light text-primary">
               Upcoming classes
             </h2>
@@ -65,6 +70,7 @@ export default async function AccountPage() {
             )}
           </section>
         </div>
+        </section>
       </main>
       <SiteFooter />
     </div>

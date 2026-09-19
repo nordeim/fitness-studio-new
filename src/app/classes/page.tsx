@@ -58,24 +58,32 @@ export default async function ClassesPage({
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <SiteHeader variant="solid" />
-      <main id="schedule" className="flex-1 scroll-mt-20 px-6 pb-24 pt-28 md:px-10 md:pt-36">
-        <div className="mx-auto max-w-6xl">
-          <p className="kicker text-primary/60">The kinetic calendar</p>
-          <h1 className="font-heading mt-4 text-5xl font-extralight italic tracking-tight text-primary md:text-7xl">
-            Class schedule
-          </h1>
-          <p className="mt-6 max-w-md text-sm leading-relaxed text-muted-foreground md:text-base">
-            Find your flow. Filter by discipline, intensity, or day and secure your spot in
-            seconds.
-          </p>
+      <SiteHeader />
+      <main id="schedule" className="flex-1 scroll-mt-20">
+        {/* Espresso hero band — the source's page header on every inner page */}
+        <section className="bg-primary px-6 pb-20 pt-36 text-primary-foreground md:px-[8vw] md:pb-28 md:pt-44">
+          <div className="max-w-[1400px]">
+            <p className="kicker mb-4 opacity-60">The kinetic calendar</p>
+            <h1 className="font-heading text-5xl font-light leading-tight md:text-7xl">
+              Class schedule
+            </h1>
+            <p className="mt-6 max-w-md font-body text-sm leading-relaxed opacity-70 md:text-base">
+              Find your flow. Filter by discipline, intensity, or day and secure your spot in
+              seconds.
+            </p>
+          </div>
+        </section>
 
-          <ScheduleBrowser
-            classes={sorted}
-            initialFilters={filters}
-            isAuthenticated={Boolean(user)}
-          />
-        </div>
+        {/* Filter rails + schedule */}
+        <section className="px-6 py-16 md:px-[8vw] md:py-24">
+          <div className="max-w-[1400px]">
+            <ScheduleBrowser
+              classes={sorted}
+              initialFilters={filters}
+              isAuthenticated={Boolean(user)}
+            />
+          </div>
+        </section>
       </main>
       <SiteFooter />
     </div>

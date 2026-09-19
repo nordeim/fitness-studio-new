@@ -1,106 +1,167 @@
+'use client'
+
+import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
-import { db } from '@/lib/db'
+import { ArrowUpRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+/** Card geometry measured off the source accordion (1440px viewport). */
+const CARD = 351 // collapsed width/height (px)
+const INFO_W = 456 // expanded info panel width (px)
+const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+
+export interface CoachCardData {
+  id: string
+  name: string
+  title: string
+  bio: string
+  imageUrl: string
+}
 
 /**
- * YOUR GUIDES — asymmetric editorial grid mirroring the source: the first
- * coach renders as a wide feature card (photo + text overlay panel), the
- * rest flow in a 3-up row. Data comes from the seeded Instructor table so
- * the home page and /instructors never disagree.
+ * YOUR GUIDES — "Meet the coaches": the source app's interactive accordion.
+ * Four image cards sit in a row; the active one springs open to reveal a
+ * gradient info panel (dusty-rose → cream) with the coach's name, discipline
+ * and tagline. Odd cards open mirror-image (row-reverse). Mobile gets
+ * stacked cards with the panel below the photo.
  */
-export async function CoachesSection({ instructorCount }: { instructorCount?: number }) {
-  const instructors = await db.instructor.findMany({ orderBy: { sortOrder: 'asc' }, take: 4 })
-  const count = instructorCount ?? instructors.length
-  const [lead, ...rest] = instructors
+export function CoachesSection({ coaches }: { coaches: CoachCardData[] }) {
+  const [active, setActive] = useState(0)
+  const [lead, ...rest] = coaches
   if (!lead) return null
 
   return (
-    <section aria-labelledby="coaches" className="px-6 py-20 md:px-10 md:py-28">
-      <div className="mx-auto max-w-6xl">
-        <div className="flex flex-wrap items-end justify-between gap-6">
+    <section aria-labelledby="coaches" className="rounded-b-[28px] py-24 md:py-32">
+      <div className="container-aura mb-16">
+        <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
           <div>
-            <p className="kicker text-primary/60">Your guides</p>
+            <p className="kicker mb-4 text-primary">Your guides</p>
             <h2
               id="coaches"
-              className="font-heading mt-4 text-4xl font-extralight italic tracking-tight text-primary md:text-5xl"
+              className="font-heading text-3xl font-light leading-tight tracking-tight text-primary md:text-5xl"
             >
               Meet the coaches
             </h2>
           </div>
           <Link
             href="/instructors"
-            className="group inline-flex min-h-11 items-center gap-3 border border-primary px-6 py-3 font-body text-[11px] font-medium uppercase tracking-[0.3em] text-primary transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="group inline-flex items-center gap-2 rounded bg-primary px-6 py-2.5 font-body text-xs font-medium uppercase tracking-[0.1em] text-primary-foreground transition-all duration-300 hover:tracking-[0.2em]"
           >
-            View all {count > 0 ? `(${count})` : ''}
-            <ArrowRight
-              className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1"
-              strokeWidth={1.5}
+            View all
+            <ArrowUpRight
+              className="h-3 w-3 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+              strokeWidth={2}
               aria-hidden="true"
             />
           </Link>
         </div>
+      </div>
 
-        <div className="mt-12 grid gap-4 md:gap-6 lg:grid-cols-3">
-          {/* Feature card — first coach */}
-          <Link
-            href={`/instructors#${lead.id}`}
-            className="group relative block overflow-hidden rounded-2xl lg:col-span-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            <div className="relative aspect-[4/3] lg:aspect-auto lg:h-full lg:min-h-[520px]">
-              <Image
-                src={lead.imageUrl}
-                alt={lead.name}
-                fill
-                sizes="(min-width: 1024px) 66vw, 100vw"
-                className="object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-              />
-              {/* White text panel overlapping the photo — the source's editorial card */}
-              <div className="absolute bottom-0 right-0 m-4 max-w-xs rounded-xl bg-background p-6 shadow-lg md:m-6">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-primary/50">
-                  {lead.title}
-                </p>
-                <h3 className="font-heading mt-2 text-3xl font-light text-primary">{lead.name}</h3>
-                <p className="mt-2 font-heading text-sm font-light italic text-primary/80">
-                  {lead.bio}
-                </p>
-              </div>
-            </div>
-          </Link>
-
-          {/* Remaining coaches — stacked feature rows */}
-          <div className="grid gap-4 md:gap-6">
-            {rest.map((instr) => (
-              <Link
-                key={instr.id}
-                href={`/instructors#${instr.id}`}
-                className="group relative block overflow-hidden rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      {/* Desktop accordion */}
+      <div className="container-aura">
+        <div className="mb-8 hidden w-full justify-between md:flex" style={{ gap: '28px' }}>
+          {coaches.map((coach, i) => {
+            const expanded = active === i
+            const reversed = i % 2 === 1
+            return (
+              <button
+                key={coach.id}
+                type="button"
+                onClick={() => setActive(i)}
+                aria-expanded={expanded}
+                aria-label={`${coach.name} — ${coach.title}`}
+                className={cn(
+                  'group flex-shrink-0 overflow-hidden rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  reversed ? 'flex-row-reverse' : 'flex-row',
+                  !expanded && 'cursor-pointer',
+                )}
+                style={{
+                  display: 'flex',
+                  alignItems: 'stretch',
+                  width: expanded ? CARD + INFO_W : CARD,
+                  height: CARD,
+                  transition: `width 0.5s ${SPRING}`,
+                }}
               >
-                <div className="relative aspect-[4/3] lg:aspect-[16/9]">
+                <div
+                  className="relative flex-shrink-0 overflow-hidden rounded-2xl bg-accent"
+                  style={{ width: CARD, minWidth: CARD, height: CARD }}
+                >
                   <Image
-                    src={instr.imageUrl}
-                    alt={instr.name}
+                    src={coach.imageUrl}
+                    alt={coach.name}
                     fill
-                    sizes="(min-width: 1024px) 33vw, 100vw"
-                    className="object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                    sizes="351px"
+                    className="object-cover object-top"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-primary/70 via-primary/10 to-transparent" />
-                  <div className="absolute bottom-0 left-0 p-5 md:p-6">
-                    <h3 className="font-heading text-2xl font-light text-primary-foreground">
-                      {instr.name}
-                    </h3>
-                    <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.2em] text-primary-foreground/80">
-                      {instr.title}
-                    </p>
-                    <p className="mt-1.5 hidden text-xs italic text-primary-foreground/70 md:block">
-                      {instr.bio}
+                </div>
+                <div
+                  className="coach-panel overflow-hidden"
+                  style={{
+                    width: expanded ? INFO_W : 0,
+                    flexShrink: 0,
+                    borderRadius: reversed ? '1rem 0 0 1rem' : '0 1rem 1rem 0',
+                    height: CARD,
+                    marginLeft: reversed ? 0 : -16,
+                    marginRight: reversed ? -16 : 0,
+                    paddingLeft: reversed ? 0 : 16,
+                    paddingRight: reversed ? 16 : 0,
+                    transition: `width 0.5s ${SPRING}`,
+                  }}
+                >
+                  <div
+                    className="flex h-full flex-col justify-between p-6 text-left"
+                    style={{
+                      opacity: expanded ? 1 : 0,
+                      transform: expanded ? 'translateX(0)' : 'translateX(12px)',
+                      transition: 'opacity 0.35s 0.15s, transform 0.35s 0.15s',
+                    }}
+                  >
+                    <div>
+                      <h3 className="font-heading mb-1 text-[28px] font-light leading-tight text-primary">
+                        {coach.name}
+                      </h3>
+                      <p className="mb-4 text-xs uppercase tracking-[0.1em] text-primary">
+                        {coach.title}
+                      </p>
+                    </div>
+                    <p className="font-body text-xs tracking-[0.08em] text-primary/60">
+                      {coach.bio}
                     </p>
                   </div>
                 </div>
-              </Link>
-            ))}
-          </div>
+              </button>
+            )
+          })}
         </div>
+
+        {/* Mobile: stacked cards */}
+        <div className="mb-8 flex flex-col gap-4 md:hidden">
+          {coaches.map((coach) => (
+            <div key={coach.id} className="w-full overflow-hidden rounded-lg">
+              <div className="relative aspect-square w-full overflow-hidden rounded-t-lg bg-accent">
+                <Image
+                  src={coach.imageUrl}
+                  alt={coach.name}
+                  fill
+                  sizes="100vw"
+                  className="object-cover object-top"
+                />
+              </div>
+              <div className="rounded-b-lg bg-gradient-to-b from-[#DAC2B9] to-[#F0EFE9] p-6">
+                <h3 className="font-heading mb-1 text-lg font-light leading-tight text-primary">
+                  {coach.name}
+                </h3>
+                <p className="mb-2 text-xs uppercase tracking-[0.1em] text-primary">{coach.title}</p>
+                <p className="font-body text-xs tracking-[0.08em] text-primary/60">{coach.bio}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* keep `rest` referenced for type-narrowing clarity */}
+        <span className="sr-only">{rest.length} additional coaches on the instructors page</span>
       </div>
     </section>
   )

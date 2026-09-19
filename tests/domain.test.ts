@@ -5,6 +5,11 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  wheelRotation,
+  labelAngle,
+  shortestRotationDelta,
+} from '../src/lib/domain/discipline-wheel'
+import {
   normalizeFilters,
   filterClasses,
   hasActiveFilters,
@@ -171,5 +176,31 @@ describe('money and JSON columns', () => {
     expect(parseJsonArray('not json')).toEqual([])
     expect(parseJsonArray('["a", 42, null]')).toEqual(['a'])
     expect(parseJsonArray('{"a":1}')).toEqual([])
+  })
+})
+
+describe('discipline wheel rotation (measured from source dial)', () => {
+  it('places the active label at 12 o’clock by counter-rotating the dial', () => {
+    expect(wheelRotation(0, 4)).toBe(0)
+    expect(wheelRotation(1, 4)).toBe(-90)
+    expect(wheelRotation(2, 4)).toBe(-180)
+    expect(wheelRotation(3, 4)).toBe(-270)
+  })
+
+  it('spaces labels evenly around the circle', () => {
+    expect(labelAngle(0, 4)).toBe(0)
+    expect(labelAngle(1, 4)).toBe(90)
+    expect(labelAngle(3, 4)).toBe(270)
+    expect(labelAngle(1, 6)).toBe(60)
+  })
+
+  it('always takes the shortest path when switching between neighbours', () => {
+    // dial rotation for active i is -i*90deg; deltas are signed accordingly
+    expect(shortestRotationDelta(0, 1, 4)).toBe(-90)
+    expect(shortestRotationDelta(1, 2, 4)).toBe(-90)
+    expect(shortestRotationDelta(0, 2, 4)).toBe(-180)
+    // 3 -> 0 wraps counterclockwise (-90), 0 -> 3 wraps clockwise (+90)
+    expect(shortestRotationDelta(3, 0, 4)).toBe(-90)
+    expect(shortestRotationDelta(0, 3, 4)).toBe(90)
   })
 })

@@ -11,7 +11,7 @@ Run from the repo root. Bun is the package manager — use `bun`, never `npm`/`y
 | `bun install` | Install dependencies |
 | `bun run dev` | Dev server on :3000 (Turbopack) |
 | `bun run lint` | ESLint 9 (flat config) — must exit clean |
-| `bun run test` | Vitest domain suite (21 tests) |
+| `bun run test` | Vitest domain suite (24 tests) |
 | `bun run db:push` | Push `prisma/schema.prisma` to SQLite (creates `db/custom.db`) |
 | `bun run scripts/seed.ts` | Idempotent seed: 4 instructors, 3 memberships, 27 classes |
 | `bun run build` | Production build |
@@ -32,7 +32,10 @@ A clean check is: `bun run lint && bun run test`. Fresh-clone bootstrap: `cp .en
 - **Next.js 16**: `searchParams` and `cookies()` are async — always `await` them (see `src/app/classes/page.tsx`). Page files may export only `default` + `metadata`/`generateMetadata`/`dynamic` — extra exports fail the build.
 - **`'use server'` files may export ONLY async functions.** Re-exporting a sync helper (e.g. `export { spotsLeft }`) from an actions file breaks every route that imports it with "Server Actions must be async functions" at runtime, not compile time. Keep helpers in `lib/` and import them from there.
 - **Turbopack cache corruption** (panic: "Failed to restore task data") — delete `.next/` and restart the dev server; the error survives reloads otherwise.
-- **Tailwind v4 CSS-first**: design tokens live in `src/app/globals.css` `:root` as HSL values extracted from the source site (`--primary: hsl(21 93% 13%)` = espresso `#411401`). There is no `tailwind.config.js` theme extension; `font-heading`/`kicker`/`.animate-breathe` utilities are defined in `globals.css` `@layer utilities`.
+- **Tailwind v4 CSS-first**: design tokens live in `src/app/globals.css` `:root` as HSL values extracted from the source site (`--primary: hsl(21 93% 13%)` = espresso `#411401`). There is no `tailwind.config.js` theme extension; `font-heading`/`kicker`/`container-aura`/`coach-panel`/`.animate-breathe`/`.animate-gradientShift` utilities are defined in `globals.css` `@layer utilities`.
+- **Source-measured design system** (session 2 parity pass): buttons are `rounded` (6px), `px-6 py-2.5 text-xs tracking-[0.1em]` easing to `0.2em` on hover with an arrow-up-right glyph (`AuraButton`). Page/section headings are Taviraj `font-light` (hero display: `font-extralight`) — **not italic** (only testimonial quotes and Inhale/Exhale are italic). Sections use `max-w-[1400px] mx-auto` with `px-6 md:px-[8vw]` gutters (the `.container-aura` utility).
+- **Header is fixed with hide-on-scroll** (`src/components/site/header.tsx`): transparent/white over each page's espresso hero band; past 64px of scroll it swaps to cream+espresso and slides out (`translateY(-100%)`). The menu is a cream dropdown panel (Taviraj 28px links + Book-a-class button + studio hours). While the source leaves the wordmark white-on-cream (near-invisible) when open, the clone switches the chrome to espresso — documented deviation.
+- **The home page's signature interactions** are measured rebuilds: the disciplines **dial** (sticky circular scrollspy selector; pure math in `lib/domain/discipline-wheel.ts`, click scrolls to the card), the **coverflow** benefits carousel (translateX ±340/680/1020, scale 0.92/0.84/0.76), the **coaches accordion** (springs to 807px with `cubic-bezier(0.34,1.56,0.64,1)`), and the **gallery collage** (absolute %-positioned photos, mask-image fades, mouse parallax, lightbox with prev/next/close).
 - **Fonts**: Taviraj (headings) + Inter (body) via `next/font/google` with CSS variables `--font-heading`/`--font-body` — do not import Google Fonts via `<link>`.
 - **`react-hooks/set-state-in-effect` is enforced**: closing the header menu on navigation is done via per-link `onClick` handlers, not an effect watching `usePathname`.
 - **Images** ship as optimized JPGs in `public/images/` (source PNGs were 41 MB; optimized to 3 MB at 1600px/q82). Use `next/image` with `fill` + `sizes`; the hero is the LCP — keep `priority` on it.
@@ -44,12 +47,14 @@ A clean check is: `bun run lint && bun run test`. Fresh-clone bootstrap: `cp .en
 - Session auth is hand-rolled: scrypt password hashes (`lib/auth/passwords.ts`), opaque random tokens with the DB storing only the SHA-256(token + SESSION_SECRET) fingerprint (`lib/auth/session.ts`). Rotating `SESSION_SECRET` invalidates all sessions.
 - Password-reset tokens are logged server-side (`console.info`) — there is no SMTP in this deployment; the client never learns whether an account exists.
 - Sign-in/sign-up validation errors flow through `toFieldErrors(zodError)` into `ActionResult.error.fieldErrors`; the client maps them to per-field `role="alert"` text.
-- The class schedule's filter rails sync to the URL query (`?type=YOGA&day=MONDAY`) — filters are server-rendered from `searchParams`, and `normalizeFilters` fails open on unknown enum values (renders all classes rather than 500).
+- The class schedule's filter rails sync to the URL query (`?type=YOGA&day=MONDAY`) — filters are server-rendered from `searchParams`, and `normalizeFilters` case-insensitively normalizes values (the source links in with `?type=Yoga`) and fails open on unknown enum values (renders all classes rather than 500).
+- **Legal pages live at `/privacy`, `/terms`, `/accessibility`** (the source's routes). The legacy `/legal/*` paths `permanentRedirect` to them.
+- Every inner page opens with an espresso hero band (`bg-primary pt-36/44 pb-20/28`) carrying kicker + h1 — the header assumes it (white wordmark over the dark band).
 - Lint ignores `scratch/`, `docs/`, `skills/`, `examples/` (reference material, not app code — `eslint.config.mjs` `ignores`).
 
 ## Testing
 
-- `bunx vitest run tests/domain.test.ts` — pure domain tests; expected values are worked examples, never recomputed by the code under test.
+- `bun run test` (or `bunx vitest run tests/domain.test.ts`) — pure domain tests (filters, booking rules, money, JSON columns, discipline-wheel rotation); expected values are worked examples, never recomputed by the code under test. `vitest.config.ts` scopes the run to `tests/` and excludes `scratch/`.
 - New domain logic goes in `lib/domain/` with tests in `tests/domain.test.ts`. Actions/pages are verified with the browser (agent-browser flow: sign-up → book → cancel is the golden path).
 
 ## Environment

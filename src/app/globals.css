@@ -124,21 +124,33 @@
   .font-body {
     font-family: var(--font-body), 'Inter', ui-sans-serif, system-ui, sans-serif;
   }
-  /* Signature AURA label: tiny, tracked-out uppercase kicker */
+  /* Signature AURA label: tiny, tracked-out uppercase kicker (source: text-xs tracking-[0.3em] uppercase) */
   .kicker {
-    @apply text-[11px] font-medium uppercase;
-    letter-spacing: 0.35em;
+    @apply text-xs font-medium uppercase;
+    letter-spacing: 0.3em;
+  }
+
+  /* Source container rhythm: max-w-[1400px] with 8vw gutters on md+ */
+  .container-aura {
+    @apply mx-auto max-w-[1400px] px-6 md:px-[8vw];
+  }
+
+  /* Coach info panel gradient (source: #DAC2B9 -> #F0EFE9) */
+  .coach-panel {
+    background-image: linear-gradient(#dac2b9, #f0efe9);
   }
 }
 
-/* AURA breathe animation — the header logo letter-spacing pulse */
+/* AURA breathe — exact source keyframes: hold 0.45em, ease to 0.7em, hold, return (7.2s) */
 @keyframes breathe {
   0% { letter-spacing: 0.45em; }
-  50% { letter-spacing: 0.55em; }
+  41.7% { letter-spacing: 0.45em; }
+  50% { letter-spacing: 0.7em; }
+  91.7% { letter-spacing: 0.7em; }
   100% { letter-spacing: 0.45em; }
 }
 .animate-breathe {
-  animation: breathe 6s ease-in-out infinite;
+  animation: breathe 7.2s ease-in-out infinite;
 }
 
 /* Character-stagger reveal for hero headings */
@@ -152,18 +164,19 @@
   animation: char-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-/* Marquee for the footer AURA STUDIO strip */
-@keyframes marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+/* Gallery backdrop — slowly shifting cream/white gradient (source: 100% 400%) */
+@keyframes gradientShift {
+  0% { background-position: 50% 0%; }
+  50% { background-position: 50% 100%; }
+  100% { background-position: 50% 0%; }
 }
-.animate-marquee {
-  animation: marquee 40s linear infinite;
+.animate-gradientShift {
+  animation: gradientShift 18s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-breathe,
-  .animate-marquee,
+  .animate-gradientShift,
   .char-rise {
     animation: none;
     opacity: 1;

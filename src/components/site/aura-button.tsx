@@ -1,12 +1,14 @@
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /**
- * The two signature AURA button styles:
- * - dark: espresso fill, cream uppercase micro-type, sharp corners
+ * The signature AURA button, measured off the source app:
+ * rounded (6px), px-6 py-2.5, 12px uppercase micro-type, tracking 0.1em
+ * that eases out to 0.2em on hover, arrow-up-right glyph that lifts on hover.
+ * - dark: espresso fill, cream text
+ * - light: cream fill, espresso text (over dark/photo surfaces)
  * - outline: 1px espresso border, transparent
- * Both render an arrow that slides on hover.
  */
 export function AuraButton({
   href,
@@ -26,19 +28,19 @@ export function AuraButton({
   disabled?: boolean
 }) {
   const base =
-    'group inline-flex min-h-11 items-center justify-center gap-3 px-8 py-3 font-body text-[11px] font-medium uppercase tracking-[0.3em] transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50'
+    'group inline-flex items-center justify-center gap-2 rounded px-6 py-2.5 font-body text-xs font-medium uppercase tracking-[0.1em] transition-all duration-300 hover:tracking-[0.2em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50'
   const variants = {
-    dark: 'bg-primary text-primary-foreground hover:bg-primary/85',
+    dark: 'bg-primary text-primary-foreground hover:bg-primary/90',
     outline: 'border border-primary text-primary hover:bg-primary hover:text-primary-foreground',
-    light: 'border border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary',
+    light: 'bg-primary-foreground text-primary hover:opacity-90',
   } as const
 
   const inner = (
     <>
       <span>{children}</span>
-      <ArrowRight
-        className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1"
-        strokeWidth={1.5}
+      <ArrowUpRight
+        className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+        strokeWidth={2}
         aria-hidden="true"
       />
     </>

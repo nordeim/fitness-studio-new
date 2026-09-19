@@ -93,7 +93,7 @@ This PAD documents `fitness-studio-new` — a from-scratch Next.js 16 rebuild of
 **ADR-005: Pure domain seam under the actions**
 
 - **Context:** Filters, capacity rules, cancellation windows, money, and JSON-column parsing are logic worth testing; Prisma models are not importable in a pure unit test without a DB.
-- **Decision:** `src/lib/domain/` holds `class-filters.ts` and `booking-rules.ts` — zero I/O imports, fully typed, covered by `tests/domain.test.ts` (21 tests).
+- **Decision:** `src/lib/domain/` holds `class-filters.ts` and `booking-rules.ts` — zero I/O imports, fully typed, covered by `tests/domain.test.ts` (24 tests).
 - **Rationale:** The scandihaven discipline (commerce package as pure seam) scaled down to two modules; tests run in milliseconds with no fixtures, and the same functions serve both server pages and client components (`formatTimeClock` is used in both).
 - **Consequences:** Actions become thin orchestrators (validate → transaction → revalidate); domain bugs are reproducible without a browser.
 - **Alternatives Rejected:** Testing through the browser only (slow, flaky), testing Prisma queries with a live DB (couples tests to I/O).
@@ -176,7 +176,8 @@ Layer 4: Components (src/components/site) — client leaves ('use client') for i
 ├── prisma/
 │   └── schema.prisma           ← 6 models; @@unique(userId,classId) backs the duplicate guard
 ├── public/
-│   └── images/                 ← 18 optimized assets (hero, 4 disciplines, sky, 4 coaches, 7 gallery, logo)
+│   └── images/                 ← 20 optimized assets (hero, 4 disciplines, sky, 4 coaches, 7 gallery,
+│                                  footer + class-packs backdrops, logo)
 ├── scripts/
 │   └── seed.ts                 ← Idempotent: upsert instructors/memberships by id, classes by natural key
 ├── src/
@@ -184,35 +185,45 @@ Layer 4: Components (src/components/site) — client leaves ('use client') for i
 │   │   ├── auth.ts             ← signUp / signIn / signOut / requestPasswordReset (+ safeRedirect local)
 │   │   └── bookings.ts         ← createBooking / cancelBooking (transactional) + listMyBookings read
 │   ├── app/
-│   │   ├── page.tsx            ← Home: hero → free week → disciplines → sky → benefits → coaches → testimonials → gallery → CTA
-│   │   ├── classes/page.tsx    ← Schedule: searchParams → normalizeFilters → server-filtered cards
-│   │   ├── pricing/page.tsx    ← First-timer special, membership plans (DB), class packs, policies
-│   │   ├── instructors/page.tsx← Philosophy + roster from DB (anchor ids match home-page links)
+│   │   ├── page.tsx            ← Home: hero → free week → disciplines (dial) → sky → benefits →
+│   │   │                          coaches (accordion) → testimonials → gallery (collage) — no trailing CTA
+│   │   ├── classes/page.tsx    ← Espresso band + searchParams → normalizeFilters → server-filtered cards
+│   │   ├── pricing/page.tsx    ← 5 bands: espresso hero / first-timer / plans / packs-on-photo / policies
+│   │   ├── instructors/page.tsx← Espresso band + philosophy + roster from DB (anchor ids match home links)
 │   │   ├── login/page.tsx      ← Auth shell (redirects authenticated users to /account)
 │   │   ├── account/page.tsx    ← My bookings (auth-gated; redirect to /login?redirect=/account)
-│   │   ├── legal/              ← privacy / terms / accessibility content pages
+│   │   ├── privacy|terms|accessibility/  ← Legal pages at the source's routes
+│   │   ├── legal/              ← permanentRedirect stubs to the new legal routes
+│   │   ├── not-found.tsx       ← Branded 404 (big 404, rule, message, Go home)
 │   │   ├── layout.tsx          ← Root: Taviraj + Inter via next/font, metadata template
 │   │   └── globals.css         ← HSL token block + @theme inline + utilities + keyframes
 │   ├── components/site/
-│   │   ├── header.tsx          ← Absolute-positioned wordmark; overlay menu; hero|solid variants
-│   │   ├── footer.tsx          ← Terracotta→espresso gradient, marquee strip, nav/contact/legal
-│   │   ├── schedule-browser.tsx← 'use client': filter rails → URL; BOOK buttons → action → toast
-│   │   ├── auth-card.tsx       ← signin|signup|reset modes in one shell; field-error mapping
+│   │   ├── header.tsx          ← Fixed, hide-on-scroll past 64px; centered Taviraj wordmark (breathe);
+│   │   │                          custom 3-line burger; cream dropdown menu + studio hours
+│   │   ├── footer.tsx          ← Photo backdrop + layered glowing SVG "AURA STUDIO" wordmark + 3 columns
+│   │   ├── schedule-browser.tsx← 'use client': pill filter rails → URL; BOOK buttons → action → toast
+│   │   ├── auth-card.tsx       ← signin|signup|reset modes; Google button (inert, honest toast) + OR divider
 │   │   ├── booking-row.tsx     ← Account booking + cancel
-│   │   ├── disciplines-section.tsx / benefits-carousel.tsx / coaches-section.tsx / gallery-section.tsx
-│   │   ├── aura-button.tsx     ← The two signature button styles (dark/outline/light) + sliding arrow
+│   │   ├── disciplines-section.tsx ← Sticky circular dial (scrollspy) + 4 stacked image cards
+│   │   ├── benefits-carousel.tsx  ← Coverflow slots (±340/680/1020px, scale 0.92/0.84/0.76)
+│   │   ├── coaches-section.tsx   ← Interactive accordion, spring-open info panels (row-reverse alternates)
+│   │   ├── gallery-section.tsx   ← Scattered collage (mask fades, mouse parallax) + lightbox
+│   │   ├── legal-page.tsx        ← Shared legal shell (espresso band + prose sections)
+│   │   ├── aura-button.tsx     ← Measured button spec: rounded, 0.1em→0.2em tracking, arrow-up-right
 │   │   └── sign-out-button.tsx
 │   ├── lib/
 │   │   ├── auth/passwords.ts   ← scrypt hash/verify (self-describing format)
 │   │   ├── auth/session.ts     ← create/get/destroy; SHA-256(token+secret) fingerprinting
-│   │   ├── domain/class-filters.ts  ← normalizeFilters, filterClasses, sortClasses, formatTimeClock, durationMinutes
+│   │   ├── domain/class-filters.ts  ← normalizeFilters (case-insensitive), filterClasses, sortClasses, formatTimeClock
 │   │   ├── domain/booking-rules.ts  ← checkBooking, spotsLeft, checkCancellation, formatMoney, parseJsonArray
+│   │   ├── domain/discipline-wheel.ts ← labelAngle / wheelRotation / shortestRotationDelta (pure, tested)
 │   │   ├── result.ts           ← ActionResult union, ok/err builders, withResult wrapper
 │   │   ├── validation.ts       ← Zod schemas + toFieldErrors
 │   │   └── db.ts               ← Prisma singleton (HMR-safe)
 │   └── app/api/                ← Scaffold health route only (no UI-mutation endpoints)
 ├── tests/
-│   └── domain.test.ts          ← 21 tests over the pure seam
+│   └── domain.test.ts          ← 24 tests over the pure seam
+├── vitest.config.ts            ← Scopes the suite to tests/ (excludes scratch/)
 ├── docs/                       ← SSH push runbook + wrapper (repository operations)
 └── skills/                     ← The documentation-generation skills that produced these docs
 ```
@@ -394,9 +405,9 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 
 | Role | Typeface | Weights | Usage |
 |---|---|---|---|
-| Display / headings | Taviraj (serif) | 200 extralight (+ italic) | Hero words, section titles, coach names, plan names — always `italic` + `tracking-tight` for the signature voice |
-| Body / UI | Inter (sans) | 300/400/500/600 | Paragraphs, buttons, filter rails |
-| Micro-label (`.kicker`) | Inter 500 | 11px, uppercase, `0.35em` tracking | Section eyebrows ("THE DISCIPLINES", "WHY AURA") |
+| Display / headings | Taviraj (serif) | 300 light (hero display: 200 extralight) | Page h1s (`text-5xl md:text-7xl font-light leading-tight`), section h2s, coach names, plan names — **non-italic**; italic reserved for testimonial quotes and Inhale/Exhale |
+| Body / UI | Inter (sans) | 300/400/500/600 | Paragraphs, buttons, filter rails, dial labels |
+| Micro-label (`.kicker`) | Inter 500 | 12px, uppercase, `0.3em` tracking | Section eyebrows ("THE DISCIPLINES", "WHY AURA") |
 
 ### 5.2 Color Tokens
 
@@ -409,23 +420,32 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 | `--ring` | `hsl(15 52% 53%)` | Terracotta — focus rings, MEDIUM intensity badge | 3.2:1 (large/UI) |
 | `--secondary` | `hsl(15 22% 84%)` | Taupe — section tints, testimonial field | — |
 | `--muted-foreground` | `hsl(270 8% 48%)` | Descriptions, meta text | 4.6:1 on cream ✦ AA |
-| Gradient A | `to top, #FFFAA4 → #F6BF8E` | First-week-free band (inline style, matches source) | decorative |
-| Gradient B | `to bottom, #8E3F19 → #411401` | Footer terracotta→espresso | decorative |
+| Gradient A | `135deg, #FFFAA4 → #F0EFE9` | First-timer band on /pricing (inline style, matches source) | decorative |
+| Gradient B | `to bottom, #F0EFE9 → #FFFAA4` | Benefits field ("Built different") | decorative |
+| Free-week glow | `to top, #F6BF8E → #FFFAA4`, blur(60px), ellipse rising from the bottom | Home "Your first week free" backdrop | decorative |
+| Coach panel | `#DAC2B9 → #F0EFE9` | Accordion info panels + instructor cards | decorative |
+| Photo backdrops | `footer-bg.jpg` (footer), `packs-bg.jpg` (class packs) | Full-bleed photography under soft dark washes | decorative |
 
 ### 5.3 Component Primitives
 
-- `AuraButton` — the two source styles: **dark** (espresso fill, cream 11px uppercase `0.3em`-tracked micro-type, sharp corners) and **outline** (1px espresso border); both carry a `→` that slides 4px on hover. `light` variant inverts for dark fields.
-- Header — absolute-positioned (no bar chrome); `hero` variant renders cream over the dark hero, `solid` renders espresso over cream pages; overlay menu is a full-screen espresso sheet.
-- Filter rails — `aria-pressed` toggle buttons; selected = espresso fill.
-- Cards — `rounded-xl` (12px) with 1px `--border`; intensity badges color-coded (LOW butter / MEDIUM terracotta / HIGH destructive).
+- `AuraButton` — measured source spec: **dark** (espresso fill), **light** (cream fill for dark/photo fields), **outline** (1px espresso border). All: `rounded` (6px), `px-6 py-2.5 text-xs uppercase`, tracking `0.1em` easing to `0.2em` on hover, arrow-up-right glyph that lifts on hover.
+- Header — `fixed top-0`, h-16, centered Taviraj wordmark running the 7.2s breathe pulse, custom three-line burger (w-6/w-6/w-4 hairlines) on the right. Transparent + white over each page's espresso hero band; past 64px of scroll it swaps to cream+espresso and slides out (`translateY(-100%)`, opacity 0), returning at the top. Menu = cream dropdown panel (Taviraj 28px links, solid Book-a-class button, studio hours; a discreet "Sign in / My bookings" link is the clone's functional addition).
+- Filter rails — `aria-pressed` rounded-full pill toggles; selected = espresso fill.
+- Cards — `rounded-xl`/`rounded-2xl` with 1px `--border`/50; intensity badges color-coded (LOW butter / MEDIUM terracotta / HIGH destructive); benefit cards carry the warm shadow `rgba(230,146,76,0.12) 0 12px 20px 4px`.
+- Discipline dial — sticky circular selector; labels at `index × 90°` ride the circle, dial counter-rotates `-(active × 90°)` (accumulated via shortest-path deltas), click scrolls to the matching card (scrollspy via IntersectionObserver).
+- Coaches accordion — 351px cards in a row; the active card springs to ~807px (`cubic-bezier(0.34,1.56,0.64,1)`, 0.5s) revealing the gradient info panel; odd cards mirror (row-reverse).
+- Gallery collage — 285px-wide photos placed by left/top %, mask-image bottom fades, mouse parallax (per-image depth), lightbox (`bg-black/80`, prev/next/close, Escape/arrow keys).
 
 ### 5.4 Motion / Animation
 
 | Animation | Definition | Reduced-motion |
 |---|---|---|
-| `breathe` | wordmark letter-spacing `0.45em ⇄ 0.55em`, 6s ease-in-out infinite | disabled |
-| `marquee` | footer "AURA STUDIO" strip, `translateX(0 → -50%)`, 40s linear | disabled |
-| `char-rise` | hero heading characters rise+fade in, 0.9s cubic-bezier(0.22,1,0.36,1) | rendered statically |
+| `breathe` | wordmark letter-spacing `0.45em → 0.7em` (hold-ease-hold), 7.2s ease-in-out infinite — exact source keyframes | disabled |
+| `char-rise` | hero heading characters rise+fade in, staggered 60ms, 0.9s cubic-bezier(0.22,1,0.36,1) | rendered statically |
+| `gradientShift` | gallery backdrop `background-position` drift, 18s ease-in-out infinite | disabled |
+| dial rotation | disciplines dial `transform: rotate()`, 0.3s ease-out; accordion width spring 0.5s | retained (state changes, not loops) |
+| menu stagger | dropdown links fade/blur in with 80ms stagger | rendered statically |
+| infinity orbit | sky-banner dot `animateMotion` along the infinity path, 6s loop | SMIL animation (browser-managed) |
 | hover transitions | 300–700ms color/scale/translate on buttons, cards, coach images | transform-only, retained (subtle) |
 
 ---
@@ -483,7 +503,7 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 
 | Category | Files | Tests | Location | Framework |
 |---|---|---|---|---|
-| Domain unit | 1 | 21 | `tests/domain.test.ts` | Vitest |
+| Domain unit | 1 | 24 | `tests/domain.test.ts` | Vitest |
 | E2E golden path (manual/browser) | — | — | browser session | agent-browser |
 
 ### 7.2 Test Patterns
@@ -500,7 +520,7 @@ The pure domain seam (`src/lib/domain/`) is at 100% branch coverage by its test 
 ### 7.4 Pre-PR / Pre-Deploy Checklist
 
 - [ ] `bun run lint` exits clean
-- [ ] `bun run test` — 21/21 pass
+- [ ] `bun run test` — 24/24 pass
 - [ ] `bun run dev` boots; golden path (sign-up → book → cancel) exercised in the browser
 - [ ] No `.env`, `db/*.db`, or key material staged (`git status` hygiene)
 - [ ] New domain logic arrived with tests in `tests/domain.test.ts`
@@ -578,10 +598,11 @@ bun run dev                 # http://localhost:3000
 |---|---|---|---|
 | MEDIUM | No hosted CI (lint/test gate is local only) | A push can skip the gate | Open — add a GitHub Actions workflow running `bun run lint && bun run test` |
 | MEDIUM | No email delivery: password-reset tokens are operator-logged, not emailed | Members cannot self-serve reset in production | Open — wire Resend/SES behind an env var; token table already exists |
-| LOW | Google sign-in absent (no OAuth provider configured) | Login card honestly states "arrives with our next release" | Open — NextAuth or OAuth route when provider credentials exist |
+| LOW | Google sign-in is present but inert (no OAuth provider configured) | The button matches the source flow and explains itself with an honest toast instead of failing silently | Open — wire NextAuth/OAuth when provider credentials exist |
 | LOW | `role` column exists but no admin surface reads it | No admin routes today | Intentional placeholder; no dead code paths expose it |
 | LOW | No numeric coverage gate | Coverage is enforced by convention (§7.3) | Open — `vitest --coverage` + thresholds once CI exists |
-| LOW | Legal copy is original (privacy/terms/accessibility) rather than the source's | Content parity gap; source pages are Base44 boilerplate | Accepted — original copy is accurate to this implementation, which is the honest choice |
+| LOW | Legal copy is original (privacy/terms/accessibility) rather than the source's | Content parity gap; source pages are Base44 placeholder boilerplate | Accepted — original copy is accurate to this implementation, which is the honest choice |
+| LOW | Header chrome switches to espresso while the source stays white over its cream menu | Visual deviation from the source's near-invisible white-on-cream wordmark | Accepted (accessibility fix) — the close control must stay visible; documented in AGENTS.md |
 
 ---
 
@@ -591,19 +612,23 @@ bun run dev                 # http://localhost:3000
 |---|---|---|
 | `prisma/schema.prisma` | ~120 | Six models; the integrity backbone (unique constraints, relations) |
 | `src/lib/result.ts` | ~55 | The ActionResult contract every mutation returns |
-| `src/lib/domain/class-filters.ts` | ~130 | Filter normalization/sorting/time formatting — the pure seam |
+| `src/lib/domain/class-filters.ts` | ~130 | Filter normalization (case-insensitive)/sorting/time formatting — the pure seam |
 | `src/lib/domain/booking-rules.ts` | ~95 | Booking guards, cancellation window, integer money, JSON columns |
+| `src/lib/domain/discipline-wheel.ts` | ~40 | Dial math: labelAngle / wheelRotation / shortestRotationDelta |
 | `src/lib/auth/passwords.ts` | ~45 | scrypt hash/verify with parameter-carrying format |
 | `src/lib/auth/session.ts` | ~75 | Opaque-token session lifecycle with HMAC fingerprints |
 | `src/actions/auth.ts` | ~105 | signUp / signIn / signOut / requestPasswordReset |
 | `src/actions/bookings.ts` | ~140 | Transactional create/cancel + listMyBookings |
-| `src/app/page.tsx` | ~230 | Home: all nine sections composed from server data |
+| `src/app/page.tsx` | ~310 | Home: hero, free-week glow, sky infinity, testimonials + the four interactive sections |
 | `src/app/classes/page.tsx` | ~65 | Schedule page: searchParams → filters → cards |
-| `src/components/site/schedule-browser.tsx` | ~230 | Filter rails, URL sync, book buttons, empty state |
+| `src/components/site/schedule-browser.tsx` | ~250 | Pill filter rails, URL sync, book buttons, empty state |
+| `src/components/site/header.tsx` | ~180 | Fixed hide-on-scroll chrome + cream dropdown menu |
+| `src/components/site/disciplines-section.tsx` | ~170 | Sticky circular dial (scrollspy) + stacked discipline cards |
+| `src/components/site/gallery-section.tsx` | ~190 | Scattered collage with mouse parallax + lightbox |
 | `src/components/site/auth-card.tsx` | ~250 | Three-mode auth shell with field errors |
 | `src/app/globals.css` | ~180 | Token block, utilities, keyframes, reduced-motion rules |
 | `scripts/seed.ts` | ~200 | Idempotent seed (natural-key upserts) |
-| `tests/domain.test.ts` | ~185 | 21 worked-example tests over the pure seam |
+| `tests/domain.test.ts` | ~230 | 24 worked-example tests over the pure seam (incl. dial rotation) |
 
 ---
 

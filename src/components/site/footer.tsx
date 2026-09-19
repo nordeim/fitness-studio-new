@@ -2,102 +2,178 @@ import Link from 'next/link'
 import { MapPin, Phone, Mail, Instagram } from 'lucide-react'
 
 /**
- * AURA footer: marquee "AURA STUDIO" strip over terracotta-to-espresso,
- * three columns (about / navigate / connect), legal rail.
+ * AURA footer — the source app's finale: a full-bleed studio photograph
+ * under a soft dark wash, a giant glowing "AURA STUDIO" wordmark drawn as
+ * layered SVG text (sharp + two blurred passes through radial masks), the
+ * three-column nav, and the legal rail. The wordmark is static on the
+ * source (no marquee).
  */
 export function SiteFooter() {
   return (
-    <footer className="relative overflow-hidden bg-gradient-to-b from-[#8E3F19] to-primary text-primary-foreground">
-      {/* Marquee wordmark */}
-      <div aria-hidden="true" className="border-b border-primary-foreground/10 py-10 md:py-14">
-        <div className="flex w-max animate-marquee whitespace-nowrap">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <span
-              key={i}
-              className="font-heading text-[13vw] font-extralight uppercase leading-none tracking-[0.08em] text-primary-foreground/90 md:text-[7vw]"
-            >
-              AURA STUDIO&nbsp;&nbsp;·&nbsp;&nbsp;
-            </span>
-          ))}
-        </div>
+    <footer
+      className="relative text-[#F0EFE9]"
+      style={{
+        backgroundImage:
+          'linear-gradient(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.15)), url("/images/footer-bg.jpg")',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center center',
+      }}
+    >
+      {/* Giant glowing wordmark */}
+      <div className="w-full px-6 py-8 md:px-[8vw] md:pt-16 md:pb-8" aria-hidden="true">
+        <svg
+          viewBox="0 0 1000 110"
+          preserveAspectRatio="xMidYMid meet"
+          className="block w-full overflow-visible"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <filter id="glow-blur" x="-10%" y="-50%" width="120%" height="200%">
+              <feGaussianBlur stdDeviation="18" />
+            </filter>
+            <filter id="soft-blur" x="-10%" y="-50%" width="120%" height="200%">
+              <feGaussianBlur stdDeviation="6" />
+            </filter>
+            <radialGradient id="mask-gradient" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="white" stopOpacity="1" />
+              <stop offset="55%" stopColor="white" stopOpacity="0.7" />
+              <stop offset="100%" stopColor="white" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="mask-gradient-inv" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="white" stopOpacity="0" />
+              <stop offset="45%" stopColor="white" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="white" stopOpacity="1" />
+            </radialGradient>
+            <mask id="glow-mask">
+              <rect width="1000" height="110" fill="black" />
+              <circle cx="500" cy="55" r="110" fill="url(#mask-gradient)" />
+            </mask>
+            <mask id="sharp-mask">
+              <rect width="1000" height="110" fill="white" />
+              <circle cx="500" cy="55" r="110" fill="url(#mask-gradient-inv)" />
+            </mask>
+          </defs>
+          <text
+            x="500"
+            y="90"
+            textAnchor="middle"
+            fontFamily="var(--font-heading)"
+            fontWeight="100"
+            fontSize="110"
+            textLength="980"
+            lengthAdjust="spacing"
+            fill="currentColor"
+            mask="url(#sharp-mask)"
+          >
+            AURA STUDIO
+          </text>
+          <text
+            x="500"
+            y="90"
+            textAnchor="middle"
+            fontFamily="var(--font-heading)"
+            fontWeight="100"
+            fontSize="110"
+            textLength="980"
+            lengthAdjust="spacing"
+            fill="currentColor"
+            filter="url(#soft-blur)"
+            mask="url(#glow-mask)"
+            opacity="0.5"
+          >
+            AURA STUDIO
+          </text>
+          <text
+            x="500"
+            y="90"
+            textAnchor="middle"
+            fontFamily="var(--font-heading)"
+            fontWeight="100"
+            fontSize="110"
+            textLength="980"
+            lengthAdjust="spacing"
+            fill="currentColor"
+            filter="url(#glow-blur)"
+            mask="url(#glow-mask)"
+            opacity="0.35"
+          >
+            AURA STUDIO
+          </text>
+        </svg>
       </div>
 
-      <div className="mx-auto grid max-w-6xl gap-12 px-6 py-16 md:grid-cols-[2fr_1fr_1.4fr] md:px-10">
-        <div>
-          <p className="font-heading text-2xl font-light italic leading-snug md:text-3xl">
-            A sanctuary for women who choose strength.
-          </p>
-          <p className="mt-4 max-w-sm text-sm leading-relaxed text-primary-foreground/70">
-            Where every movement is a statement of power.
-          </p>
-        </div>
-
-        <nav aria-label="Footer">
-          <h2 className="kicker text-primary-foreground/60">Navigate</h2>
-          <ul className="mt-5 space-y-3">
-            {[
-              ['Classes', '/classes'],
-              ['Pricing', '/pricing'],
-              ['Instructors', '/instructors'],
-              ['My Bookings', '/account'],
-            ].map(([label, href]) => (
-              <li key={href}>
-                <Link
-                  href={href}
-                  className="text-sm text-primary-foreground/80 transition-colors hover:text-accent"
+      <div className="px-6 py-8 md:px-[8vw] md:py-16">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-8">
+          <div>
+            <p className="font-body max-w-xs text-sm leading-relaxed">
+              A sanctuary for women who choose strength. Where every movement is a statement of
+              power.
+            </p>
+          </div>
+          <nav aria-label="Footer">
+            <p className="mb-6 text-xs uppercase tracking-[0.3em]">Navigate</p>
+            <div className="flex flex-col gap-3">
+              <Link href="/classes" className="text-sm tracking-wide transition-opacity hover:opacity-70">
+                Classes
+              </Link>
+              <Link href="/pricing" className="text-sm tracking-wide transition-opacity hover:opacity-70">
+                Pricing
+              </Link>
+              <Link href="/instructors" className="text-sm tracking-wide transition-opacity hover:opacity-70">
+                Instructors
+              </Link>
+              {/* Functional addition for the clone's real auth — not on source */}
+              <Link href="/account" className="text-sm tracking-wide transition-opacity hover:opacity-70">
+                My Bookings
+              </Link>
+            </div>
+          </nav>
+          <div>
+            <p className="mb-6 text-xs uppercase tracking-[0.3em]">Connect</p>
+            <div className="flex flex-col gap-3 text-sm">
+              <div className="flex items-center gap-3">
+                <MapPin className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+                <span>500 Terry Francine Street San Francisco, CA 94158</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Phone className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+                <a href="tel:+11234567890" className="transition-opacity hover:opacity-70">
+                  123-456-7890
+                </a>
+              </div>
+              <div className="flex items-center gap-3">
+                <Mail className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+                <a href="mailto:info@mysite.com" className="transition-opacity hover:opacity-70">
+                  info@mysite.com
+                </a>
+              </div>
+              <div className="flex items-center gap-3">
+                <Instagram className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+                <a
+                  href="https://instagram.com"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                  className="transition-opacity hover:opacity-70"
                 >
-                  {label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <div>
-          <h2 className="kicker text-primary-foreground/60">Connect</h2>
-          <ul className="mt-5 space-y-3 text-sm text-primary-foreground/80">
-            <li className="flex items-start gap-3">
-              <MapPin className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.5} aria-hidden="true" />
-              <span>500 Terry Francine Street, San Francisco, CA 94158</span>
-            </li>
-            <li className="flex items-center gap-3">
-              <Phone className="h-4 w-4 shrink-0" strokeWidth={1.5} aria-hidden="true" />
-              <a href="tel:+11234567890" className="transition-colors hover:text-accent">
-                123-456-7890
-              </a>
-            </li>
-            <li className="flex items-center gap-3">
-              <Mail className="h-4 w-4 shrink-0" strokeWidth={1.5} aria-hidden="true" />
-              <a href="mailto:info@mysite.com" className="transition-colors hover:text-accent">
-                info@mysite.com
-              </a>
-            </li>
-            <li className="flex items-center gap-3">
-              <Instagram className="h-4 w-4 shrink-0" strokeWidth={1.5} aria-hidden="true" />
-              <a
-                href="https://instagram.com"
-                rel="noopener noreferrer"
-                target="_blank"
-                className="transition-colors hover:text-accent"
-              >
-                @sovereign.studio
-              </a>
-            </li>
-          </ul>
+                  @sovereign.studio
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="border-t border-primary-foreground/10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-6 text-xs text-primary-foreground/50 md:flex-row md:px-10">
+      <div className="px-6 pb-8 md:px-[8vw]">
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-6 text-xs opacity-70 md:flex-row">
           <p>© {new Date().getFullYear()} AURA Studio. All rights reserved.</p>
           <nav aria-label="Legal" className="flex gap-6">
-            <Link href="/legal/privacy" className="transition-colors hover:text-accent">
+            <Link href="/privacy" className="transition-opacity hover:opacity-70">
               Privacy Policy
             </Link>
-            <Link href="/legal/terms" className="transition-colors hover:text-accent">
+            <Link href="/terms" className="transition-opacity hover:opacity-70">
               Terms of Service
             </Link>
-            <Link href="/legal/accessibility" className="transition-colors hover:text-accent">
+            <Link href="/accessibility" className="transition-opacity hover:opacity-70">
               Accessibility Statement
             </Link>
           </nav>
