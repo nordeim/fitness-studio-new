@@ -5,7 +5,7 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     // scratch/ holds reference checkouts (scandihaven, fitness-studio-new) —
     // never picked up by this project's test run
-    exclude: ['node_modules/**', 'scratch/**', '.next/**'],
+    exclude: ['node_modules/**', 'scratch/**', 'skills/**', 'docs/**', 'backup/**', '.next/**'],
     coverage: {
       provider: 'v8',
       include: ['src/lib/domain/**'],
