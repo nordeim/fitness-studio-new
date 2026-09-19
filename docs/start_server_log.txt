@@ -1,3 +1,12 @@
+$ grep -v '^#' .env
+
+DATABASE_URL=file:../db/custom.db
+
+SESSION_SECRET="R3GREjiBSxmy+HQVzXk3IMKAHmNdO0I0wT4GpMvvVVA="
+
+NEXT_PUBLIC_SITE_URL=https://fitness-studio.jesspete.shop
+SITE_URL=https://fitness-studio.jesspete.shop
+
 $ bun install
 [0.05ms] ".env"
 bun install v1.3.14 (0d9b296a)
