@@ -23,6 +23,16 @@ const R = 8 // block size
 const P = 1 // parallelization
 const KEYLEN = 64
 
+/**
+ * A valid-format scrypt hash of a random throwaway password, used by the
+ * sign-in action to equalize work when the account does not exist: verifying
+ * against this costs the same scrypt effort as a real check, so response
+ * timing never reveals whether an email has an account (the account-
+ * existence oracle the uniform error copy already hides).
+ */
+export const DUMMY_PASSWORD_HASH =
+  'scrypt$16384$8$1$qAKrl3yJHITwyaENWqe/Gw==$hDf1cVO25m4f7e2JqFjMUXk9aDux3QSy/+t7g5BGL89ZHAVrjskphQXXeEmGWOAGiiUJ/UXynryaCClhj5eC2w=='
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16)
   const derived = (await scrypt(password, salt, KEYLEN, { N, r: R, p: P })) as Buffer

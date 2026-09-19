@@ -20,13 +20,14 @@ The original is a Base44 template app: a women-only fitness studio marketing sit
 |---|---|---|
 | 🏠 | **Marketing home** | Hero, free-week CTA, circular discipline dial (scrollspy + All-classes CTA), sky banner, coverflow benefits (below-stage arrow controls + dot rail; stacked on mobile), coaches accordion (rows of two, independent per row), testimonial spotlight (photo band with rotating flip-cards), gallery collage with lightbox |
 | 📅 | **Class schedule** | TYPE / INTENSITY / DAY pill filters synced to the URL, live spots-left, empty state with clear-filters |
-| 🔐 | **Email auth** | Sign-up / sign-in with scrypt hashing and HMAC-fingerprinted session tokens |
+| 🔐 | **Email auth** | Sign-up / sign-in with scrypt hashing and HMAC-fingerprinted session tokens; timing-equalized sign-in (no account-existence oracle) |
 | 🔁 | **Complete password reset** | Single-use 1-hour tokens — email delivery via Resend when configured (operator log in dev); `/login?token=…` new-password card; resets revoke every session |
 | 📝 | **Transactional bookings** | Capacity + duplicate guards inside one DB transaction; book & cancel from the schedule and account page; re-booking a cancelled class re-activates the row (unique-key safe) |
 | 💳 | **Pricing & memberships** | Seeded membership plans, class packs, policy pages |
 | 🧑‍🏫 | **Instructor profiles** | Bios, specialties, certifications from the database |
 | ♿ | **Accessibility** | WCAG 2.2 AA targets, keyboard-navigable carousel + lightbox, reduced-motion support |
-| 🧪 | **Tested domain layer** | 59 Vitest tests over the pure booking/filter/money/dial/spotlight/404/reset/URL-resolution logic, with a 100% coverage gate on `src/lib/domain/**` (CI-enforced) |
+| 🧪 | **Tested domain layer** | 72 Vitest tests over the pure booking/filter/money/dial/spotlight/404/reset/URL-resolution/rate-limit logic, with a 100% coverage gate on `src/lib/domain/**` (CI-enforced) |
+| 🚦 | **Rate-limited auth** | Fixed-window limits on every auth mutation (sign-in 10/15 min per IP + per email; sign-up and reset throttled too) with customer-safe retry copy — brute-force and token-spam resistant |
 | 🚀 | **Standalone deployment** | `output: "standalone"` build with app-side SQLite URL resolution (`lib/domain/database-url.ts`) — `bun run build && bun run start` serves the seeded schedule, auth, and booking flows from a persistent `<repo>/db/custom.db`, no env changes needed |
 | 🛡️ | **Hardened delivery** | Security headers (X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, HSTS), env-driven `robots.txt` + `sitemap.xml`, DB-free health endpoint, GitHub Actions CI (lint → typecheck → coverage tests → seeded build) |
 | 🧭 | **Source-measured UI** | Fixed hide-on-scroll header (inert closed menu), espresso page bands, source-matched 404 (slate platform screen, quoted path, full-viewport centered), legal pages at `/privacy` `/terms` `/accessibility` in the source's cream prose layout, footer with copyright hairline |
@@ -71,19 +72,21 @@ flowchart TB
   │                      accordion, testimonial spotlight, collage + lightbox,
   │                      schedule browser, auth card (4 modes incl. new-password)
   📂 lib/
-    📂 auth/           ← scrypt passwords, HMAC session tokens
+    📂 auth/           ← scrypt passwords (+ timing-equalizer dummy hash), HMAC session tokens
     📂 domain/         ← Pure logic (100% coverage-gated): class-filters, booking-rules,
     │                     discipline-wheel, testimonial-spotlight, not-found,
-    │                     reset-policy, reset-delivery, database-url
+    │                     reset-policy, reset-delivery, database-url, rate-limit
     📄 result.ts       ← ActionResult<T> contract
     📄 validation.ts   ← Zod schemas
+    📄 rate-limit-store.ts ← In-process fixed-window counters + auth limit policies
     📄 db.ts           ← Prisma client + datasource URL anchoring (findSchemaDir)
   📄 app/globals.css   ← Design tokens (HSL) + custom utilities + keyframes
 📂 prisma/schema.prisma ← User, Session, StudioClass, Instructor, Membership, Booking, PasswordResetToken
 📂 prisma/migrations/   ← SQL migrations (db:migrate / db:reset; db:push remains the CI flow)
 📂 public/images/       ← Optimized photography (1600px, q82) incl. footer/packs backdrops
 📂 scripts/seed.ts      ← Idempotent seed
-📂 tests/               ← Vitest suites: domain.test.ts, reset.test.ts, database-url.test.ts (59 tests)
+📂 tests/               ← Vitest suites: domain.test.ts, reset.test.ts, database-url.test.ts,
+                          rate-limit.test.ts (72 tests)
 📂 vitest.config.ts     ← Scopes the suite to tests/; 100% coverage gate on src/lib/domain/**
 📂 .github/workflows/   ← CI: lint → typecheck → coverage tests → db push/seed → build
 📂 docs/                ← SSH push runbook + wrapper (repo ops), session logs,
@@ -123,7 +126,7 @@ Requirements: **Bun ≥ 1.1** (or Node ≥ 20 with npm — commands below are bu
 - `/classes` lists 27 seeded classes; clicking **YOGA** narrows to 8 and the URL becomes `/classes?type=YOGA` (values are case-insensitive — the home page links in as `?type=Yoga`).
 - `/login` → **Create an account** → book any class → **My Bookings** shows it; cancel works.
 - `/privacy`, `/terms`, `/accessibility` render the legal pages in the source's cream prose layout (centered `max-w-3xl` column, Title-Case serif h1, h2 sections); `/legal/*` permanently redirects to them; any unknown URL renders the source-matched slate 404 with the quoted offending path.
-- `bun run lint && bun run typecheck && bun run test` → ESLint clean, typecheck clean, 59/59 tests pass.
+- `bun run lint && bun run typecheck && bun run test` → ESLint clean, typecheck clean, 72/72 tests pass.
 - `/robots.txt` and `/sitemap.xml` respond with the env-driven metadata routes; `/api` answers the DB-free health check.
 
 ## Environment Variables
@@ -143,7 +146,7 @@ bun run test                     # full suite
 bunx vitest run tests/domain.test.ts --reporter verbose
 ```
 
-The suite covers: filter normalization (ALL/absent/unknown/case-insensitive values), schedule sorting, 12-hour clock formatting (incl. malformed-input fail-soft), booking write plans (create / deny DUPLICATE / deny CAPACITY_FULL / re-activate a cancelled row), the 2-hour cancellation window, money formatting (integer cents, unknown-currency fallback), JSON-column round-trips, the discipline-dial rotation math (label angles, dial counter-rotation, shortest-path deltas, zero-slot guards), the testimonial spotlight state machine, the 404 quoted-path copy, the reset-token policy (valid/expired/used/not-found boundaries), the reset delivery decision + email builder, and the SQLite datasource-URL resolution (schema-relative anchoring, absolute/non-SQLite passthrough, POSIX root-clamping). `bun run test:coverage` enforces 100% statements/branches/functions/lines on `src/lib/domain/**`.
+The suite covers: filter normalization (ALL/absent/unknown/case-insensitive values), schedule sorting, 12-hour clock formatting (incl. malformed-input fail-soft), booking write plans (create / deny DUPLICATE / deny CAPACITY_FULL / re-activate a cancelled row), the 2-hour cancellation window, money formatting (integer cents, unknown-currency fallback), JSON-column round-trips, the discipline-dial rotation math (label angles, dial counter-rotation, shortest-path deltas, zero-slot guards), the testimonial spotlight state machine, the 404 quoted-path copy, the reset-token policy (valid/expired/used/not-found boundaries), the reset delivery decision + email builder, the SQLite datasource-URL resolution (schema-relative anchoring, absolute/non-SQLite passthrough, POSIX root-clamping), and the fixed-window rate-limit decisions (first attempt, under-limit counting, limit-boundary denial, exact-boundary rollover, retry-after computation and customer-safe copy). `bun run test:coverage` enforces 100% statements/branches/functions/lines on `src/lib/domain/**`.
 
 ## Design System
 

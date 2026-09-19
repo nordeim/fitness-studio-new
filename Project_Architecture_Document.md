@@ -217,20 +217,25 @@ Layer 4: Components (src/components/site) — client leaves ('use client') for i
 │   │   ├── aura-button.tsx     ← Measured button spec: rounded, 0.1em→0.2em tracking, arrow-up-right
 │   │   └── sign-out-button.tsx
 │   ├── lib/
-│   │   ├── auth/passwords.ts   ← scrypt hash/verify (self-describing format; typed promisify)
+│   │   ├── auth/passwords.ts   ← scrypt hash/verify (self-describing format; typed promisify) + DUMMY_PASSWORD_HASH (timing equalizer)
 │   │   ├── auth/session.ts     ← create/get/destroy; SHA-256(token+secret) fingerprinting
 │   │   ├── domain/class-filters.ts  ← normalizeFilters (case-insensitive), filterClasses, sortClasses, formatTimeClock
 │   │   ├── domain/booking-rules.ts  ← checkBooking, spotsLeft, checkCancellation, formatMoney, parseJsonArray
 │   │   ├── domain/discipline-wheel.ts ← labelAngle / wheelRotation / shortestRotationDelta (pure, tested)
 │   │   ├── domain/reset-policy.ts    ← validateResetTokenState (valid/expired/used/not_found — pure, tested)
 │   │   ├── domain/reset-delivery.ts  ← chooseResetChannel + buildResetEmail (pure, tested)
+│   │   ├── domain/database-url.ts    ← resolveDatabaseUrl (schema-relative SQLite anchoring — session 12)
+│   │   ├── domain/rate-limit.ts      ← evaluateRateLimit + formatRetryAfter (fixed-window policy — session 14)
 │   │   ├── result.ts           ← ActionResult union, ok/err builders, withResult wrapper
 │   │   ├── validation.ts       ← Zod schemas + toFieldErrors
-│   │   └── db.ts               ← Prisma singleton (HMR-safe)
+│   │   ├── rate-limit-store.ts ← in-process counters + clientIp + AUTH_RATE_LIMITS (session 14)
+│   │   └── db.ts               ← Prisma singleton (HMR-safe; datasourceUrl anchored at the real schema dir)
 │   └── hooks/                  ← (removed — session 8 dead-code sweep)
 ├── tests/
 │   ├── domain.test.ts          ← 36 tests over the pure seam
-│   └── reset.test.ts           ← 12 tests: reset-token policy + delivery
+│   ├── reset.test.ts           ← 12 tests: reset-token policy + delivery
+│   ├── database-url.test.ts    ← 11 tests: SQLite URL resolution (session 12)
+│   └── rate-limit.test.ts      ← 13 tests: fixed-window decisions + retry copy (session 14)
 ├── vitest.config.ts            ← Scopes the suite to tests/; 100% coverage gate on src/lib/domain/**
 ├── .github/workflows/ci.yml    ← CI: lint → typecheck → coverage tests → db push/seed → build
 ├── docs/                       ← SSH push runbook + wrapper (repository operations)
@@ -498,12 +503,16 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 - **Session model:** random opaque token → httpOnly cookie → SHA-256 fingerprint row in `Session` (unique, indexed). `getCurrentUser()` is the single read seam; expired sessions are deleted on encounter.
 - **Authorization:** member-scoped data access only — `listMyBookings` filters by `userId`; `cancelBookingAction` verifies ownership before mutating. The `role` column exists for a future admin surface; no admin routes are exposed.
 - **Password reset (complete loop):** single-use, 1-hour tokens (`PasswordResetToken.usedAt`). Delivery follows `chooseResetChannel` (`lib/domain/reset-delivery.ts`): the Resend API when `RESEND_API_KEY` is configured, otherwise the operator log (`console.info`) — the dev setup. Either way the client response is identical whether or not the account exists. Consuming a token (`resetPasswordAction`, guarded by the pure `validateResetTokenState` policy) rehashes the password, marks the token used, and revokes every session for the member in one transaction; the `/login?token=…` deep link opens the new-password card.
+- **Rate limiting (session 14):** every auth mutation is throttled by a fixed-window counter — `signIn` 10/15 min per IP **and** per email, `signUp` 5/h per IP, reset requests 5/h per IP and 3/h per email, reset consumption 10/h per IP. The decision math is pure (`lib/domain/rate-limit.ts`, 100%-covered: window rollover at the exact boundary, limit-boundary denial, denied attempts freeze state so a lockout always ends within one window); the counters live in an in-process Map (`lib/rate-limit-store.ts`) keyed `action:dimension:identity`, pruned past 10k entries, HMR-safe via `globalThis`. Single-instance by design (the documented SQLite topology) — move the counters to a shared store (Redis / DB table) before adding replicas. The policies are product decisions, not env knobs.
+- **Timing equalization (session 14):** sign-in always runs one scrypt verification — against the account's hash, or `DUMMY_PASSWORD_HASH` (a valid-format hash of a throwaway password, same N/r/p/keylen) when the account is absent — so response timing never reveals which emails have accounts. The uniform error copy already hid the oracle; this closes the timing side channel.
 
 ### 6.4 Threat Model
 
 | Vector | Mitigation |
 |---|---|
-| Credential stuffing | scrypt cost factors; uniform failure copy (no oracle for user enumeration) |
+| Credential stuffing | scrypt cost factors; uniform failure copy (no oracle for user enumeration); timing-equalized verify (dummy scrypt on absent accounts); fixed-window rate limits on every auth mutation (session 14) |
+| Password brute force | signIn 10 attempts/15 min per IP and per email — lockout ends within one window; browser-verified firing at exactly the 11th attempt on both dev and the standalone production runtime |
+| Reset-token flooding / mail spam | reset requests throttled 5/h per IP and 3/h per email; token consumption throttled 10/h per IP |
 | Stolen-cookie persistence after reset | resetPasswordAction deletes every Session row for the member |
 | Session hijack via DB leak | tokens unrecoverable from fingerprints |
 | XSS exfiltrating sessions | httpOnly cookies; no `dangerouslySetInnerHTML` anywhere |
@@ -520,7 +529,7 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 
 | Category | Files | Tests | Location | Framework |
 |---|---|---|---|---|
-| Domain unit | 3 | 59 | `tests/domain.test.ts` (36), `tests/reset.test.ts` (12), `tests/database-url.test.ts` (11) | Vitest |
+| Domain unit | 4 | 72 | `tests/domain.test.ts` (36), `tests/reset.test.ts` (12), `tests/database-url.test.ts` (11), `tests/rate-limit.test.ts` (13) | Vitest |
 | Coverage gate | — | — | `vitest.config.ts` (100% stmts/branches/functions/lines on `src/lib/domain/**`) | @vitest/coverage-v8 |
 | E2E golden path (manual/browser) | — | — | browser session (dev server **and** the standalone build after deployment-path changes) | agent-browser |
 
@@ -532,6 +541,7 @@ The four domain entities mirror the Base44 source's schemas, probed live via its
 - **Re-booking regression (session 4):** a cancelled row occupies `@@unique([userId, classId])` forever, so `planBookingWrite` must plan a **reactivate** (row update), not a create — the test pins the plan (`reactivate`, bookingId, spotsLeft) and the deny-when-since-filled case.
 - **Reset-token policy (session 8, TDD):** `validateResetTokenState` boundaries — expiry at exactly-now is expired, a used marker dominates expiry, missing rows are `not_found` — plus the delivery decision (`chooseResetChannel`) and email builder (`buildResetEmail`: URL in both bodies, token never in the subject).
 - **Datasource-URL resolution (session 12, TDD):** `resolveDatabaseUrl` — schema-relative anchoring of `file:../db/custom.db`, bare/`./` relative paths, multi-hop `..` collapse with POSIX root-clamping, absolute and non-SQLite passthrough, blank→fallback, and the bare `file:` staying loud. The anchor-finding itself (`findSchemaDir`, fs I/O) is verified by the standalone E2E run, per the repo's I/O-verification convention.
+- **Rate-limit policy (session 14, TDD):** `evaluateRateLimit` — first-ever attempt starts a window at count 1, under-limit attempts count up, the limit-boundary attempt is denied with the state frozen (a lockout always ends within one window), the exact window boundary rolls over to a fresh window, and a limit-1 policy denies the immediate second attempt; `formatRetryAfter` rounds partial units up (never promises less than the real wait), pluralizes, and clamps non-positive input. The in-process store (`lib/rate-limit-store.ts`, I/O) is verified by browser burn tests — the limiter fires at exactly the 11th sign-in attempt on both the dev and standalone runtimes, and the lockout holds even for the correct password.
 - **Golden path (browser-verified):** sign-up → filter schedule (`?type=YOGA` shows exactly the 8 yoga classes) → book (spots 7→6, "BOOKED ✓", sonner toast) → verify on `/account` → cancel (booking removed, spot released, toast) → **re-book the same class** (cancelled row re-activated, spots 9→10). This exact sequence was executed and observed during the session-4 build.
 
 ### 7.3 Coverage Thresholds
@@ -542,7 +552,7 @@ The pure domain seam (`src/lib/domain/`) is at 100% statements/branches/function
 
 - [ ] `bun run lint` exits clean (no-console / prefer-const / no-unused-vars enforced)
 - [ ] `bun run typecheck` exits clean (`tsc --noEmit`; the build no longer ignores type errors)
-- [ ] `bun run test:coverage` — 59/59 pass, 100% gate green on `src/lib/domain/**`
+- [ ] `bun run test:coverage` — 72/72 pass, 100% gate green on `src/lib/domain/**`
 - [ ] `bun run dev` boots; golden path (sign-up → book → cancel → re-book) exercised in the browser
 - [ ] Deployment-path changes only: the same golden path re-run against `bun run start` (the standalone build)
 - [ ] No `db/*.db` or key material staged (`git status` hygiene; the tracked `.env` is the documented operator exception — keep third-party secrets out of it)
@@ -648,6 +658,8 @@ bun run dev                 # http://localhost:3000
 | — | **Fixed in session 10:** `components.json` (the shadcn CLI manifest) still aliased `@/components/ui` and `@/hooks`, both deleted in session 8 | Stale scaffold config referencing removed directories | Resolved — deleted; `bunx shadcn init` regenerates it if primitives are ever wanted again |
 | — | **Fixed in session 12:** the standalone deployment (`output: "standalone"`, added with the operator's session-11 package/version commit) 500'd on every DB-backed route in production (`/classes`, auth POSTs, `/account`) — the traced Prisma client resolves relative `file:` URLs against a different base than the CLI, and the standalone workers' cwd plus the traced `prisma/schema.prisma` copy compounded the divergence | The deployed site (fitness-studio.jesspete.shop) could not render the schedule or authenticate | Resolved — app-side datasource-URL resolution (`lib/domain/database-url.ts` pure + 100%-covered; `db.ts` `findSchemaDir` anchors at the real schema dir, skipping `.next` copies). Reproduced, fixed, and golden-path-verified against the standalone build end-to-end (§4.3) |
 | — | **Fixed in session 12:** sharp 0.34.x carried high-severity libvips/libheif advisories (npm audit: 4 high) on the runtime image-optimization path | CVE exposure in production image processing | Resolved — bumped to sharp 0.35.4 (audit's own recommendation); standalone `/_next/image` verified 200. Remaining 3 high advisories are the `deepmerge-ts` chain inside the Prisma CLI (`@prisma/config`) — dev-time tooling only, no runtime import, and every available "fix" is a regression (Prisma 6.12 downgrade or 8.0.0-RC); accepted and documented |
+| — | **Fixed in session 14:** no rate limiting on any auth mutation — sign-in allowed unbounded password brute force, sign-up and reset requests allowed spam (account flooding, token/mail flooding) | Brute-force and abuse exposure on the auth surface | Resolved — fixed-window limits on all four auth actions (pure `lib/domain/rate-limit.ts` + in-process `lib/rate-limit-store.ts`); limiter browser-verified firing at exactly the 11th sign-in attempt on dev AND the standalone production runtime, lockout holding even for the correct password. Single-instance counters (memory-only) — move to a shared store before horizontal scale (documented in §6.3) |
+| — | **Fixed in session 14:** sign-in skipped the scrypt verification when the account was absent (`user ? verify : false`), making "email exists" measurable via response timing | Account-existence oracle via timing side channel | Resolved — timing-equalized sign-in: a dummy hash (`DUMMY_PASSWORD_HASH`, same scrypt parameters) is verified when the account is absent, so both paths burn identical work; the uniform error copy was already in place |
 | LOW | The operator's committed `.env` carries a live `SESSION_SECRET` in a public repo | Secret disclosure lowers the DB-leak → session-forgery barrier (the fingerprint design specifically defends that boundary) | Accepted (operator choice — single-operator pull-and-deploy workflow; documented in §8.2 and AGENTS.md). Rotate the secret if the repo's audience ever widens; never add third-party secrets to it |
 | LOW | `package-lock.json` and `bun.lock` coexist (bun primary, npm for the operator's server installs) | Dual lockfiles can drift | Accepted — CI installs via `bun install --frozen-lockfile` only; dependency changes must regenerate both (`bun add …` then `npm install --package-lock-only`), documented in AGENTS.md |
 
@@ -666,6 +678,8 @@ bun run dev                 # http://localhost:3000
 | `src/lib/domain/not-found.ts` | ~10 | `formatNotFoundCopy` — the quoted-path 404 sentence |
 | `src/lib/domain/reset-policy.ts` | ~25 | `validateResetTokenState` — the reset-token state machine (valid/expired/used/not_found) |
 | `src/lib/domain/reset-delivery.ts` | ~45 | `chooseResetChannel` + `buildResetEmail` — delivery decision and message construction |
+| `src/lib/domain/rate-limit.ts` | ~85 | `evaluateRateLimit` (fixed-window decision) + `formatRetryAfter` (customer-safe wait copy) — the pure rate-limit seam (session 14) |
+| `src/lib/rate-limit-store.ts` | ~100 | In-process counters (`consumeRateLimit`), client-IP extraction, and the auth limit policies — the I/O side of rate limiting |
 | `src/lib/domain/database-url.ts` | ~70 | `resolveDatabaseUrl` — schema-relative resolution of SQLite `file:` URLs (standalone-deploy fix, session 12) |
 | `src/lib/db.ts` | ~75 | PrismaClient singleton + `findSchemaDir` anchor (walks up from the cwd, skips `.next` traced copies) feeding the explicit `datasourceUrl` |
 | `src/lib/auth/passwords.ts` | ~45 | scrypt hash/verify with parameter-carrying format |

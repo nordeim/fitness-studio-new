@@ -1,12 +1,12 @@
 # Screenshots — AURA Studio clone (dev server)
 
 Captured from `bun run dev` (Next.js 16.3, Turbopack) at 1440×900 desktop
-(and 390×844 mobile) after the session-12 standalone-deployment fix
-(app-side SQLite URL resolution — `lib/domain/database-url.ts` — plus the
-sharp 0.35.4 security bump; the same golden path was re-verified against
-the `bun run start` standalone build). Pages were scrolled through before
-full-page capture to trigger lazy images; every interactive state below is
-live dev-server output.
+(and 390×844 mobile) after the session-14 auth hardening (fixed-window
+rate limits on every auth mutation + timing-equalized sign-in; the
+golden path and the rate-limit burn test were re-verified on both the
+dev server and the `bun run start` standalone build). Pages were
+scrolled through before full-page capture to trigger lazy images; every
+interactive state below is live dev-server output.
 
 | File | Route | What it shows |
 |---|---|---|

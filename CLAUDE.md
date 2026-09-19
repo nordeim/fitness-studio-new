@@ -58,7 +58,8 @@ Production clone of `fitness-studio.base44.app` ("AURA Studio"), a women-only bo
 - scrypt password hashing (`src/lib/auth/passwords.ts`), self-describing format `scrypt$N$r$p$salt$hash`.
 - Opaque session tokens: 32 random bytes in an httpOnly cookie; the DB stores `sha256(token + SESSION_SECRET)` — a DB leak is not session forgery.
 - `getCurrentUser()` resolves the member per request and sweeps expired sessions opportunistically.
-- Uniform "Invalid email or password" (no account-existence oracle); password-reset confirmation is likewise unconditional.
+- Uniform "Invalid email or password" (no account-existence oracle); password-reset confirmation is likewise unconditional. Sign-in is **timing-equalized**: a missing account still runs a full scrypt verify against `DUMMY_PASSWORD_HASH`, so response timing reveals nothing either.
+- **Every auth mutation is rate-limited** (fixed windows; pure policy in `lib/domain/rate-limit.ts`, in-process counters in `lib/rate-limit-store.ts`): signIn 10/15 min per IP and per email, signUp 5/h per IP, reset request 5/h per IP and 3/h per email, reset consume 10/h per IP. Denied attempts return `RATE_LIMITED` with customer-safe retry copy; counters are memory-only (restart clears them) — single-instance by design, move to a shared store before scaling horizontally.
 - **Complete reset loop**: `requestPasswordResetAction` creates a single-use 1-hour token and delivers the link by email (Resend, when `RESEND_API_KEY` is set) or the operator log; `/login?token=…` opens the new-password card; `resetPasswordAction` validates the token via the pure `validateResetTokenState` policy, rehashes the password, marks the token used, and revokes every session for the member — all in one transaction.
 - Security headers (X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy, HSTS) ship from `next.config.ts`; CSP is deliberately absent (Next.js App Router requires inline bootstrap scripts — see PAD §6.4).
 
@@ -83,7 +84,7 @@ CI (`.github/workflows/ci.yml`) runs the full gate — lint → typecheck → co
 | `bun run dev` | Dev server :3000 (teed to `dev.log`) |
 | `bun run lint` | ESLint 9 flat config — must be clean (no-console/prefer-const/no-unused-vars enforced) |
 | `bun run typecheck` | `tsc --noEmit` — must be clean |
-| `bun run test` | Vitest domain suite (59 tests) |
+| `bun run test` | Vitest domain suite (72 tests) |
 | `bun run test:coverage` | Suite + 100% coverage gate on `src/lib/domain/**` |
 | `bun run db:push` / `bun run db:generate` / `bun run db:migrate` / `bun run db:reset` | Schema lifecycle (push = CI flow; migrate/reset = migration flow) |
 | `bun run scripts/seed.ts` | Idempotent seed |
@@ -96,7 +97,7 @@ Clean check order: `bun run lint && bun run typecheck && bun run test`.
 
 | Level | Tool | Location | Notes |
 |---|---|---|---|
-| Unit | Vitest | `tests/domain.test.ts`, `tests/reset.test.ts`, `tests/database-url.test.ts` | Filters, schedule sorting, time formatting, booking write plans (create/deny/re-activate), cancellation window, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy, reset-token policy (valid/expired/used/not_found boundaries), reset delivery channel + email builder, SQLite datasource-URL resolution (schema-relative anchoring, passthrough, root-clamping). 100% coverage enforced on `src/lib/domain/**` |
+| Unit | Vitest | `tests/domain.test.ts`, `tests/reset.test.ts`, `tests/database-url.test.ts`, `tests/rate-limit.test.ts` | Filters, schedule sorting, time formatting, booking write plans (create/deny/re-activate), cancellation window, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy, reset-token policy (valid/expired/used/not_found boundaries), reset delivery channel + email builder, SQLite datasource-URL resolution (schema-relative anchoring, passthrough, root-clamping), fixed-window rate-limit decisions (window rollover, limit boundary, retry-after) + retry-after copy formatting. 100% coverage enforced on `src/lib/domain/**` |
 | E2E (manual) | Browser | — | Golden path: sign-up → filter schedule → book → verify "Booked ✓" + toast → cancel from /account → re-book (re-activation). Reset loop: request → open link → new password → sign in → old password rejected → token reuse rejected |
 
 - Expected values in tests are worked examples (e.g. `formatTimeClock('18:45') === '6:45 PM'`), never recomputed by the same code under test.
@@ -117,7 +118,7 @@ Clean check order: `bun run lint && bun run typecheck && bun run test`.
 
 ## Error Handling & Debugging
 
-- Action errors: `{ code: 'VALIDATION' | 'UNAUTHENTICATED' | 'NOT_FOUND' | 'CONFLICT' | 'CAPACITY_FULL' | 'INTERNAL', message, fieldErrors? }` — the client toasts `message` and maps `fieldErrors` to inputs.
+- Action errors: `{ code: 'VALIDATION' | 'UNAUTHENTICATED' | 'NOT_FOUND' | 'CONFLICT' | 'CAPACITY_FULL' | 'RATE_LIMITED' | 'INTERNAL', message, fieldErrors? }` — the client toasts `message` and maps `fieldErrors` to inputs. `RATE_LIMITED` carries the customer-safe wait copy ("Try again in N minutes.").
 - Debugging order: reproduce with the exact command → read the dev-server log → isolate at the pure seam (`lib/domain`) with a test → fix the root cause.
 - Turbopack panic ("Failed to restore task data"): `rm -rf .next` and restart — the cache, not your code, is corrupt.
 

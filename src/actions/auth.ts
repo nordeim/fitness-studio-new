@@ -9,9 +9,11 @@ import { headers } from 'next/headers'
 import { db } from '@/lib/db'
 import { err, ok, withResult, type ActionResult } from '@/lib/result'
 import { createSession, destroySession } from '@/lib/auth/session'
-import { hashPassword, verifyPassword } from '@/lib/auth/passwords'
+import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from '@/lib/auth/passwords'
 import { validateResetTokenState, RESET_INVALID_MESSAGE } from '@/lib/domain/reset-policy'
 import { chooseResetChannel, buildResetEmail } from '@/lib/domain/reset-delivery'
+import { formatRetryAfter } from '@/lib/domain/rate-limit'
+import { AUTH_RATE_LIMITS, clientIp, consumeRateLimit } from '@/lib/rate-limit-store'
 import {
   signInSchema,
   signUpSchema,
@@ -29,6 +31,11 @@ export async function signUpAction(formData: FormData): Promise<ActionResult<{ e
     })
     if (!parsed.success) {
       return err('VALIDATION', 'Please fix the highlighted fields.', toFieldErrors(parsed.error))
+    }
+
+    const limited = consumeRateLimit(`signup:ip:${await clientIp()}`, AUTH_RATE_LIMITS.signUpIp)
+    if (!limited.allowed) {
+      return err('RATE_LIMITED', `Too many attempts to create an account. ${formatRetryAfter(limited.retryAfterMs)}`)
     }
 
     const existing = await db.user.findUnique({ where: { email: parsed.data.email } })
@@ -57,8 +64,26 @@ export async function signInAction(formData: FormData): Promise<ActionResult<{ e
       return err('VALIDATION', 'Please fix the highlighted fields.', toFieldErrors(parsed.error))
     }
 
+    const ip = await clientIp()
+    const ipLimited = consumeRateLimit(`signin:ip:${ip}`, AUTH_RATE_LIMITS.signInIp)
+    if (!ipLimited.allowed) {
+      return err('RATE_LIMITED', `Too many sign-in attempts. ${formatRetryAfter(ipLimited.retryAfterMs)}`)
+    }
+    const emailLimited = consumeRateLimit(
+      `signin:email:${parsed.data.email}`,
+      AUTH_RATE_LIMITS.signInEmail,
+    )
+    if (!emailLimited.allowed) {
+      return err('RATE_LIMITED', `Too many sign-in attempts. ${formatRetryAfter(emailLimited.retryAfterMs)}`)
+    }
+
     const user = await db.user.findUnique({ where: { email: parsed.data.email } })
-    const valid = user ? await verifyPassword(parsed.data.password, user.passwordHash) : false
+    // Constant-work verify: a missing account burns the same scrypt effort as
+    // a real one, so response timing never reveals which emails have accounts.
+    const valid = await verifyPassword(
+      parsed.data.password,
+      user ? user.passwordHash : DUMMY_PASSWORD_HASH,
+    )
     if (!user || !valid) {
       // Uniform message — never reveal which half was wrong.
       return err('NOT_FOUND', 'Invalid email or password.')
@@ -135,6 +160,19 @@ export async function requestPasswordResetAction(
     if (!parsed.success) {
       return err('VALIDATION', 'Please fix the highlighted fields.', toFieldErrors(parsed.error))
     }
+
+    const ipLimited = consumeRateLimit(`resetreq:ip:${await clientIp()}`, AUTH_RATE_LIMITS.resetRequestIp)
+    if (!ipLimited.allowed) {
+      return err('RATE_LIMITED', `Too many reset requests. ${formatRetryAfter(ipLimited.retryAfterMs)}`)
+    }
+    const emailLimited = consumeRateLimit(
+      `resetreq:email:${parsed.data.email}`,
+      AUTH_RATE_LIMITS.resetRequestEmail,
+    )
+    if (!emailLimited.allowed) {
+      return err('RATE_LIMITED', `Too many reset requests. ${formatRetryAfter(emailLimited.retryAfterMs)}`)
+    }
+
     const user = await db.user.findUnique({ where: { email: parsed.data.email } })
     if (user) {
       const token = randomBytes(32).toString('base64url')
@@ -169,6 +207,11 @@ export async function resetPasswordAction(
     })
     if (!parsed.success) {
       return err('VALIDATION', 'Please fix the highlighted fields.', toFieldErrors(parsed.error))
+    }
+
+    const limited = consumeRateLimit(`resetpass:ip:${await clientIp()}`, AUTH_RATE_LIMITS.resetPasswordIp)
+    if (!limited.allowed) {
+      return err('RATE_LIMITED', `Too many attempts. ${formatRetryAfter(limited.retryAfterMs)}`)
     }
 
     const row = await db.passwordResetToken.findUnique({ where: { token: parsed.data.token } })

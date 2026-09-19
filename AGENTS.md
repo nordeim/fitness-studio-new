@@ -12,7 +12,7 @@ Run from the repo root. Bun is the primary package manager; a `package-lock.json
 | `bun run dev` | Dev server on :3000 (Turbopack; output teed to `dev.log`) |
 | `bun run lint` | ESLint 9 (flat config) — must exit clean (no-console / prefer-const / no-unused-vars enforced) |
 | `bun run typecheck` | `tsc --noEmit` — must exit clean (the build no longer ignores type errors) |
-| `bun run test` | Vitest domain suite (59 tests) |
+| `bun run test` | Vitest domain suite (72 tests) |
 | `bun run test:coverage` | Same suite with the 100% gate on `src/lib/domain/**` (statements/branches/functions/lines) |
 | `bun run db:push` | Push `prisma/schema.prisma` to SQLite (creates `db/custom.db`) — the CI flow |
 | `bun run db:migrate` | `prisma migrate dev` — development migrations (`prisma/migrations/`, owner's server flow) |
@@ -27,7 +27,8 @@ A clean check is: `bun run lint && bun run typecheck && bun run test`. CI (`.git
 
 - **Single Next.js 16 App Router app** (no monorepo). Server Components by default; `"use client"` only on interactive leaves (`src/components/site/*`).
 - **Mutations go through Server Actions in `src/actions/`** that return `ActionResult<T>` from `@/lib/result` — never throw across the client boundary, never REST endpoints for UI mutations.
-- **Domain logic is pure and lives in `src/lib/domain/`** (`class-filters.ts`, `booking-rules.ts`, `discipline-wheel.ts`, `testimonial-spotlight.ts`, `not-found.ts`, `reset-policy.ts`, `reset-delivery.ts`, `database-url.ts`) — no I/O, no Prisma imports; this is the unit-tested seam, held to 100% coverage by `bun run test:coverage`.
+- **Domain logic is pure and lives in `src/lib/domain/`** (`class-filters.ts`, `booking-rules.ts`, `discipline-wheel.ts`, `testimonial-spotlight.ts`, `not-found.ts`, `reset-policy.ts`, `reset-delivery.ts`, `database-url.ts`, `rate-limit.ts`) — no I/O, no Prisma imports; this is the unit-tested seam, held to 100% coverage by `bun run test:coverage`.
+- **Every auth mutation is rate-limited** (session 14): `signIn` (10/15 min per IP **and** per email), `signUp` (5/h per IP), `requestPasswordReset` (5/h per IP, 3/h per email), `resetPassword` (10/h per IP). The fixed-window decision is pure (`lib/domain/rate-limit.ts`); the counters live in an in-process Map (`lib/rate-limit-store.ts`) — single-instance by design (the documented SQLite topology), memory-only (a restart clears lockouts as well as counters), and the policies are product decisions, not env knobs. Sign-in also runs a **dummy scrypt verify** when the account is absent (`DUMMY_PASSWORD_HASH` in `lib/auth/passwords.ts`) so response timing never reveals which emails have accounts.
 - **Money is integer minor units (cents)** everywhere. `formatMoney(2800) === "$28"`. Floats never touch money paths.
 - **Booking capacity + duplicate checks run inside `db.$transaction`** in `src/actions/bookings.ts` — the read of `spotsTaken`, the guard, and the increment are one transaction; `@@unique([userId, classId])` is the last-line defense. **Re-booking after cancellation re-activates the cancelled row** (`planBookingWrite` in `lib/domain/booking-rules.ts` returns `reactivate`) — a fresh `create` would collide with the unique key the cancelled row occupies forever.
 - **Dependency direction**: `app/ → components/ → lib/domain/ → lib/db`. `lib/domain` must not import the db client (it stays pure/testable).
@@ -51,7 +52,7 @@ A clean check is: `bun run lint && bun run typecheck && bun run test`. CI (`.git
 ## Conventions that differ from defaults
 
 - `DATABASE_URL` is relative to the schema file: `file:../db/custom.db` (Prisma resolves from `prisma/`, not the repo root).
-- Session auth is hand-rolled: scrypt password hashes (`lib/auth/passwords.ts`), opaque random tokens with the DB storing only the SHA-256(token + SESSION_SECRET) fingerprint (`lib/auth/session.ts`). Rotating `SESSION_SECRET` invalidates all sessions. The **password-reset loop is complete**: request → link (email via Resend when `RESEND_API_KEY` is set, otherwise the operator log) → `/login?token=…` new-password card → `resetPasswordAction` (token policy in `lib/domain/reset-policy.ts`; single-use, 1-hour expiry, revokes all sessions on use).
+- Session auth is hand-rolled: scrypt password hashes (`lib/auth/passwords.ts`), opaque random tokens with the DB storing only the SHA-256(token + SESSION_SECRET) fingerprint (`lib/auth/session.ts`). Rotating `SESSION_SECRET` invalidates all sessions. The **password-reset loop is complete**: request → link (email via Resend when `RESEND_API_KEY` is set, otherwise the operator log) → `/login?token=…` new-password card → `resetPasswordAction` (token policy in `lib/domain/reset-policy.ts`; single-use, 1-hour expiry, revokes all sessions on use). All four auth actions are rate-limited (see Architecture invariants) and sign-in is timing-equalized.
 - Password-reset delivery follows `chooseResetChannel` (`lib/domain/reset-delivery.ts`): email via the Resend API when `RESEND_API_KEY` is configured, otherwise the link is logged server-side (`console.info`) — the dev setup. Either way the client never learns whether an account exists.
 - Sign-in/sign-up validation errors flow through `toFieldErrors(zodError)` into `ActionResult.error.fieldErrors`; the client maps them to per-field `role="alert"` text.
 - The class schedule's filter rails sync to the URL query (`?type=YOGA&day=MONDAY`) — filters are server-rendered from `searchParams`, and `normalizeFilters` case-insensitively normalizes values (the source links in with `?type=Yoga`) and fails open on unknown enum values (renders all classes rather than 500).
@@ -65,7 +66,7 @@ A clean check is: `bun run lint && bun run typecheck && bun run test`. CI (`.git
 
 ## Testing
 
-- `bun run test` (or `bunx vitest run`) — pure domain tests across `tests/domain.test.ts` + `tests/reset.test.ts` + `tests/database-url.test.ts` (filters, booking write plans incl. re-activation, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy, reset-token policy, reset delivery, SQLite URL resolution); expected values are worked examples, never recomputed by the code under test. `vitest.config.ts` scopes the run to `tests/`, excludes `scratch/`/`skills/`/`docs/`/`backup/`, and enforces 100% coverage on `src/lib/domain/**` under `bun run test:coverage`.
+- `bun run test` (or `bunx vitest run`) — pure domain tests across `tests/domain.test.ts` + `tests/reset.test.ts` + `tests/database-url.test.ts` + `tests/rate-limit.test.ts` (filters, booking write plans incl. re-activation, money, JSON columns, discipline-wheel rotation, testimonial spotlight, 404 copy, reset-token policy, reset delivery, SQLite URL resolution, fixed-window rate-limit decisions + retry-after copy); expected values are worked examples, never recomputed by the code under test. `vitest.config.ts` scopes the run to `tests/`, excludes `scratch/`/`skills/`/`docs/`/`backup/`, and enforces 100% coverage on `src/lib/domain/**` under `bun run test:coverage`.
 - New domain logic goes in `lib/domain/` with tests in `tests/`. Actions/pages are verified with the browser (agent-browser flow: sign-up → book → cancel is the golden path; the reset loop is request → link → new password → sign in) — and standalone-deployment changes get the same flow re-run against `bun run start`.
 
 ## Environment
